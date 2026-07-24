@@ -429,26 +429,32 @@ export function buildRoVsRealSheet(
     t('excel.reports.ro_real.is_within_hours'),
   ];
 
-  const tasksByNameMap = new Map();
+  const tasksByGroupMap = new Map();
+  const groupInfoMap = new Map();
+
   allTaskDataForSequence.forEach((task) => {
-    if (!tasksByNameMap.has(task.driver)) tasksByNameMap.set(task.driver, []);
-    tasksByNameMap.get(task.driver).push(task);
+    const gKey = task.groupKey || `${task.driver}_${getBasePlate(task.plat) || task.plat}`;
+    if (!tasksByGroupMap.has(gKey)) tasksByGroupMap.set(gKey, []);
+    tasksByGroupMap.get(gKey).push(task);
+    if (!groupInfoMap.has(gKey)) {
+      groupInfoMap.set(gKey, {
+        driver: task.driver,
+        plat: task.plat,
+        basePlat: task.basePlat || getBasePlate(task.plat) || task.plat,
+        gKey,
+      });
+    }
   });
 
-  const seenDriversRo = new Set();
-  const filteredDrivers = driverData.filter((d) => {
-    if (!tasksByNameMap.has(d.name)) return false;
-    if (seenDriversRo.has(d.name)) return false;
-    seenDriversRo.add(d.name);
-    return true;
-  });
-  const sortedDrivers = sortRows(filteredDrivers, 'plat', 'name');
+  const sortedGroups = sortRows(Array.from(groupInfoMap.values()), 'plat', 'driver');
   const sheetData = [headers];
   const manualAssignRows = new Set();
 
-  sortedDrivers.forEach((driver) => {
-    const tasks = tasksByNameMap.get(driver.name);
-    const hT = hubTimesMap.get(driver.name) || { hubETD: null, hubETA: null };
+  sortedGroups.forEach((group) => {
+    const tasks = tasksByGroupMap.get(group.gKey) || [];
+    const hT = hubTimesMap.get(group.gKey) ||
+      hubTimesMap.get(group.driver) || { hubETD: null, hubETA: null };
+
     sheetData.push([
       null,
       null,
@@ -470,7 +476,7 @@ export function buildRoVsRealSheet(
     ]);
 
     tasks
-      .sort((a, b) => a.roSequence - b.roSequence)
+      .sort((a, b) => (a.roSequence || 0) - (b.roSequence || 0))
       .forEach((task) => {
         const cData = `${task.customerName} - ${task.customerId} - ${task.locationId}`;
         const ro = task.roSequence || '-';
@@ -518,6 +524,7 @@ export function buildRoVsRealSheet(
           wHours,
         ]);
       });
+
     sheetData.push([
       null,
       null,
