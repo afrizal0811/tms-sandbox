@@ -74,7 +74,7 @@ export function buildTanggalRoutingSheet(wb, dateStr, t) {
   XLSX.utils.book_append_sheet(wb, ws, t('common.routing_date'));
 }
 
-export function buildStartFinishSheet(wb, timeDataObjects, t) {
+export function buildStartFinishSheet(wb, timeDataObjects, t, driverData = []) {
   const headers = [
     t('common.license_number'),
     t('common.driver'),
@@ -85,7 +85,81 @@ export function buildStartFinishSheet(wb, timeDataObjects, t) {
     t('excel.reports.time_driver.duration'),
     t('excel.reports.time_driver.travel_dist'),
   ];
-  const sortTime = sortRows(timeDataObjects, 'plat', 'driver');
+
+  const driverPlatLookup = new Map();
+  (driverData || []).forEach((d) => {
+    const dName = d.name && d.name !== '-' && d.name !== 'N/A' ? d.name.trim().toLowerCase() : '';
+    const dPlat = d.plat && d.plat !== '-' && d.plat !== 'N/A' ? d.plat : '';
+    if (dName && dPlat && !dPlat.toUpperCase().includes('DEMO')) {
+      if (!driverPlatLookup.has(dName)) {
+        driverPlatLookup.set(dName, dPlat);
+      }
+    }
+  });
+
+  const cleanedList = [];
+  (timeDataObjects || []).forEach((i) => {
+    const driver = i.driver && i.driver !== '-' && i.driver !== 'N/A' ? i.driver : '';
+    if (!driver) return;
+
+    let rawPlat =
+      i.plat ||
+      i.vehicleName ||
+      i.vehiclePlat ||
+      i.licenseNumber ||
+      i.licensePlate ||
+      i.vehicleId ||
+      i.vehicle_name ||
+      i.vehicle_plate ||
+      i.plate_number ||
+      i.plat_nomor ||
+      (typeof i.vehicle === 'string' ? i.vehicle : '') ||
+      i.assignedVehicle?.name ||
+      i.assignedVehicle?.plat ||
+      i.nopol ||
+      '';
+
+    if (!rawPlat || rawPlat === '-' || rawPlat === 'N/A') {
+      rawPlat = driverPlatLookup.get(driver.trim().toLowerCase()) || '';
+    }
+
+    if (!rawPlat || rawPlat.toUpperCase().includes('DEMO')) return;
+
+    const basePlat = getBasePlate(rawPlat) || rawPlat;
+    cleanedList.push({ ...i, driver, plat: rawPlat, basePlat });
+  });
+
+  const uniqueEventsMap = new Map();
+  cleanedList.forEach((item) => {
+    const sTime = item.rawStart || item.startTimeFmt || 'null';
+    const fTime = item.rawFinish || item.finishTimeFmt || 'null';
+    const exactKey = `${item.driver}_${item.basePlat}_${sTime}_${fTime}`;
+
+    if (!uniqueEventsMap.has(exactKey)) {
+      uniqueEventsMap.set(exactKey, { ...item });
+    } else {
+      const ext = uniqueEventsMap.get(exactKey);
+      ext.totalDistance = (Number(ext.totalDistance) || 0) + (Number(item.totalDistance) || 0);
+    }
+  });
+
+  const uniqueEvents = Array.from(uniqueEventsMap.values());
+
+  const groupCountMap = new Map();
+  uniqueEvents.forEach((item) => {
+    const groupKey = `${item.driver}_${item.basePlat}`;
+    groupCountMap.set(groupKey, (groupCountMap.get(groupKey) || 0) + 1);
+  });
+
+  const processedTime = uniqueEvents.map((item) => {
+    const groupKey = `${item.driver}_${item.basePlat}`;
+    return {
+      ...item,
+      isMultiple: (groupCountMap.get(groupKey) || 0) > 1,
+    };
+  });
+
+  const sortTime = sortRows(processedTime, 'plat', 'driver');
   const sheetData = [
     headers,
     ...sortTime.map((i) => {
@@ -168,7 +242,7 @@ export function buildMergedDetailSheet(wb, driverData, routingMap, deliveryMap, 
     t('common.distance'),
     t('excel.reports.truck_detail.total_visit'),
     t('excel.reports.truck_detail.total_delivery'),
-    t('excel.reports.truck_detail.ship_dur'),
+    t('excel.reports.truck_detail.ship_duration'),
     t('excel.reports.truck_detail.delivered'),
     t('excel.reports.truck_detail.eta_first'),
     t('excel.reports.truck_detail.etd_hub'),
@@ -176,17 +250,73 @@ export function buildMergedDetailSheet(wb, driverData, routingMap, deliveryMap, 
     t('excel.reports.truck_detail.info_diff_day'),
   ];
 
+  const allVehicleGroups = new Map();
+
+  (driverData || []).forEach((driver) => {
+    const cleanDriver =
+      driver.name && driver.name !== '-' && driver.name !== 'N/A' ? driver.name : '';
+    const cleanPlat =
+      driver.plat && driver.plat !== '-' && driver.plat !== 'N/A' ? driver.plat : '';
+    if (!cleanDriver || !cleanPlat || cleanPlat.toUpperCase().includes('DEMO')) return;
+
+    const basePlat = getBasePlate(cleanPlat) || cleanPlat;
+    const key = `${cleanDriver}_${basePlat}`;
+    if (!allVehicleGroups.has(key)) {
+      allVehicleGroups.set(key, { driver: cleanDriver, plat: cleanPlat, key });
+    }
+  });
+
+  routingMap.forEach((rData, key) => {
+    const cleanDriver =
+      rData.driver && rData.driver !== '-' && rData.driver !== 'N/A'
+        ? rData.driver
+        : key.split('_')[0] || '';
+    const cleanPlat = rData.plat && rData.plat !== '-' && rData.plat !== 'N/A' ? rData.plat : '';
+    if (!cleanDriver || !cleanPlat || cleanPlat.toUpperCase().includes('DEMO')) return;
+
+    if (!allVehicleGroups.has(key)) {
+      allVehicleGroups.set(key, {
+        driver: cleanDriver,
+        plat: cleanPlat,
+        key,
+      });
+    }
+  });
+
+  deliveryMap.forEach((dData, key) => {
+    const cleanDriver =
+      dData.driver && dData.driver !== '-' && dData.driver !== 'N/A'
+        ? dData.driver
+        : key.split('_')[0] || '';
+    const cleanPlat = dData.plat && dData.plat !== '-' && dData.plat !== 'N/A' ? dData.plat : '';
+    if (!cleanDriver || !cleanPlat || cleanPlat.toUpperCase().includes('DEMO')) return;
+
+    if (!allVehicleGroups.has(key)) {
+      allVehicleGroups.set(key, {
+        driver: cleanDriver,
+        plat: cleanPlat,
+        key,
+      });
+    }
+  });
+
   const excelDataRows = [];
-  const seenDrivers = new Set();
+  const seenGroups = new Set();
 
-  driverData.forEach((driver) => {
-    if (driver.plat?.toUpperCase().includes('DEMO')) return;
+  allVehicleGroups.forEach((item, key) => {
+    if (
+      !item.driver ||
+      !item.plat ||
+      item.plat === '-' ||
+      item.driver === '-' ||
+      item.plat?.toUpperCase().includes('DEMO')
+    )
+      return;
+    if (seenGroups.has(key)) return;
+    seenGroups.add(key);
 
-    if (seenDrivers.has(driver.name)) return;
-    seenDrivers.add(driver.name);
-
-    const rData = routingMap.get(driver.name);
-    const dData = deliveryMap.get(driver.name);
+    const rData = routingMap.get(key);
+    const dData = deliveryMap.get(key);
     const hasRouting = rData?.hasTrips;
     const hasDelivery = dData && dData.totalOutlet > 0;
 
@@ -241,8 +371,8 @@ export function buildMergedDetailSheet(wb, driverData, routingMap, deliveryMap, 
     }
 
     excelDataRows.push({
-      plat: getBasePlate(driver.plat),
-      driver: driver.name,
+      plat: getBasePlate(item.plat) || item.plat || '-',
+      driver: item.driver || '-',
       wPct,
       vPct,
       dist,
@@ -429,26 +559,32 @@ export function buildRoVsRealSheet(
     t('excel.reports.ro_real.is_within_hours'),
   ];
 
-  const tasksByNameMap = new Map();
+  const tasksByGroupMap = new Map();
+  const groupInfoMap = new Map();
+
   allTaskDataForSequence.forEach((task) => {
-    if (!tasksByNameMap.has(task.driver)) tasksByNameMap.set(task.driver, []);
-    tasksByNameMap.get(task.driver).push(task);
+    const gKey = task.groupKey || `${task.driver}_${getBasePlate(task.plat) || task.plat}`;
+    if (!tasksByGroupMap.has(gKey)) tasksByGroupMap.set(gKey, []);
+    tasksByGroupMap.get(gKey).push(task);
+    if (!groupInfoMap.has(gKey)) {
+      groupInfoMap.set(gKey, {
+        driver: task.driver,
+        plat: task.plat,
+        basePlat: task.basePlat || getBasePlate(task.plat) || task.plat,
+        gKey,
+      });
+    }
   });
 
-  const seenDriversRo = new Set();
-  const filteredDrivers = driverData.filter((d) => {
-    if (!tasksByNameMap.has(d.name)) return false;
-    if (seenDriversRo.has(d.name)) return false;
-    seenDriversRo.add(d.name);
-    return true;
-  });
-  const sortedDrivers = sortRows(filteredDrivers, 'plat', 'name');
+  const sortedGroups = sortRows(Array.from(groupInfoMap.values()), 'plat', 'driver');
   const sheetData = [headers];
   const manualAssignRows = new Set();
 
-  sortedDrivers.forEach((driver) => {
-    const tasks = tasksByNameMap.get(driver.name);
-    const hT = hubTimesMap.get(driver.name) || { hubETD: null, hubETA: null };
+  sortedGroups.forEach((group) => {
+    const tasks = tasksByGroupMap.get(group.gKey) || [];
+    const hT = hubTimesMap.get(group.gKey) ||
+      hubTimesMap.get(group.driver) || { hubETD: null, hubETA: null };
+
     sheetData.push([
       null,
       null,
@@ -470,7 +606,7 @@ export function buildRoVsRealSheet(
     ]);
 
     tasks
-      .sort((a, b) => a.roSequence - b.roSequence)
+      .sort((a, b) => (a.roSequence || 0) - (b.roSequence || 0))
       .forEach((task) => {
         const cData = `${task.customerName} - ${task.customerId} - ${task.locationId}`;
         const ro = task.roSequence || '-';
@@ -518,6 +654,7 @@ export function buildRoVsRealSheet(
           wHours,
         ]);
       });
+
     sheetData.push([
       null,
       null,
@@ -699,32 +836,56 @@ export function buildDistanceSummary(wb, driverData, routingMap, timeDataObjects
     actFrzT = 0,
     actFrzD = 0;
 
-  const seenDriversEst = new Set();
-  driverData.forEach((driver) => {
-    if (driver.plat?.toUpperCase().includes('DEMO')) return;
+  const seenGroupsEst = new Set();
+  routingMap.forEach((rData, key) => {
+    if (seenGroupsEst.has(key)) return;
+    seenGroupsEst.add(key);
 
-    if (seenDriversEst.has(driver.name)) return;
-    seenDriversEst.add(driver.name);
-
-    const rData = routingMap.get(driver.name);
     if (rData?.hasTrips) {
       const dist = rData.totalDistance || 0;
       const dur = rData.shipDurationRaw || 0;
 
-      let storageType = 'DRY';
-      if (driver.name.toUpperCase().includes('DRY')) {
+      const driverName = rData.driver || key.split('_')[0] || '';
+      if (driverName.toUpperCase().includes('DRY')) {
         estDryT += dur;
         estDryD += dist;
-        storageType = 'DRY';
-      } else if (driver.name.toUpperCase().includes('FRZ')) {
+      } else if (driverName.toUpperCase().includes('FRZ')) {
         estFrzT += dur;
         estFrzD += dist;
-        storageType = 'FROZEN';
       }
     }
   });
 
-  timeDataObjects.forEach((i) => {
+  const mergedTimeMap = new Map();
+  (timeDataObjects || []).forEach((i) => {
+    const rawPlat =
+      i.plat ||
+      i.vehicleName ||
+      i.vehiclePlat ||
+      i.licenseNumber ||
+      i.licensePlate ||
+      i.vehicleId ||
+      i.vehicle_name ||
+      i.vehicle_plate ||
+      i.plate_number ||
+      i.plat_nomor ||
+      (typeof i.vehicle === 'string' ? i.vehicle : '') ||
+      i.assignedVehicle?.name ||
+      i.assignedVehicle?.plat ||
+      i.nopol ||
+      '';
+    const basePlat = getBasePlate(rawPlat) || rawPlat || '';
+    const key = `${i.driver}_${basePlat}`;
+    if (!mergedTimeMap.has(key)) {
+      mergedTimeMap.set(key, { ...i, plat: rawPlat || i.plat });
+    } else {
+      const ext = mergedTimeMap.get(key);
+      ext.travelTimeVal = (Number(ext.travelTimeVal) || 0) + (Number(i.travelTimeVal) || 0);
+      ext.totalDistance = (Number(ext.totalDistance) || 0) + (Number(i.totalDistance) || 0);
+    }
+  });
+
+  Array.from(mergedTimeMap.values()).forEach((i) => {
     if (i.driver.toUpperCase().includes('DRY')) {
       actDryT += i.travelTimeVal || 0;
       actDryD += i.totalDistance || 0;
