@@ -438,6 +438,7 @@ export const dictionary = {
     },
     delivery: {
       delivery_form: 'Form Pengiriman',
+      delivery_list: 'Daftar Pengiriman',
       est_arrival: 'Estimasi Datang',
       est_depart: 'Estimasi Keluar',
       hub_eta_short: 'Estimasi tidak akurat',
@@ -1112,6 +1113,7 @@ export const dictionary = {
     },
     delivery: {
       delivery_form: 'Delivery Form',
+      delivery_list: 'Delivery List',
       est_arrival: 'Estimated Arrival',
       est_depart: 'Estimated Departure',
       hub_eta_short: 'Estimation is not accurate',
