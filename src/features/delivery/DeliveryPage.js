@@ -7,28 +7,32 @@ import StorageTypeFilter from '@/components/StorageTypeFilter';
 import Tooltip from '@/components/Tooltip';
 import BodyCard from '@/components/card/BodyCard';
 import HeaderCard from '@/components/card/HeaderCard';
+import RoutingModal from '@/components/modal/RoutingModal';
 import { useLanguage } from '@/context/LanguageContext';
 import { getLocalStorage, setLocalStorage } from '@/lib/localStorageHandler';
 import {
   calculateStartFinishDates,
+  checkInvalidSoList,
   formatDateUniversal,
   formatUTC7,
   getBasePlate,
   isEmpty,
   normalizeEmail,
+  parseCustomerString,
   toApiDateString,
   tomorrowDate,
 } from '@/lib/utils';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getLocationHistories, getResultsSummary, getTasks } from '../../lib/api';
+import { getHubs, getLocationHistories, getResultsSummary, getTasks } from '../../lib/api';
 import { driverTimeStamps, getDriverData } from '../../lib/driverData';
-import { toastError } from '../../lib/toast';
+import { toastError, toastWarning } from '../../lib/toast';
 import TableData from './components/TableData';
 import {
   getDriverName,
   handleDeliveryFormDownload,
   handleDeliveryListDownload,
-  handleRouteTransactionDownload,
+  handleFullRouteTransDownload,
+  handlePartialRouteTransDownload,
 } from './help';
 
 export default function DeliveryPage() {
@@ -47,6 +51,8 @@ export default function DeliveryPage() {
   const [isDetailView, setIsDetailView] = useState(false);
   const [emptyMessage, setEmptyMessage] = useState(t('common.no_data'));
   const [routingResults, setRoutingResults] = useState([]);
+  const [isRoutingModalOpen, setIsRoutingModalOpen] = useState(false);
+  const [hubsData, setHubsData] = useState([]);
 
   const downloadDropdownRef = useRef(null);
 
@@ -61,6 +67,16 @@ export default function DeliveryPage() {
   }, []);
 
   useEffect(() => {
+    const fetchHubsData = async () => {
+      try {
+        const res = await getHubs();
+        setHubsData(res);
+      } catch (error) {}
+    };
+    fetchHubsData();
+  }, []);
+
+  useEffect(() => {
     const handleClickOutside = (e) => {
       if (downloadDropdownRef.current && !downloadDropdownRef.current.contains(e.target)) {
         setIsDownloadDropdownOpen(false);
@@ -69,6 +85,29 @@ export default function DeliveryPage() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (allRoutes.length === 0) return;
+    const badPlates = new Set();
+
+    allRoutes.forEach((r) => {
+      r.trips.forEach((t) => {
+        if (t.isHub || !t.orderId || t.isReDelivery) return;
+        const parsed = parseCustomerString(t.visitName);
+        const isBadCust = isEmpty(parsed?.id) || isEmpty(parsed?.location);
+        const bad = checkInvalidSoList(parsed.invoiceNumber || t.orderId, isBadCust);
+
+        if (bad) badPlates.add(r.vehicleName || 'Vehicle');
+      });
+    });
+
+    if (badPlates.size > 0) {
+      const platesStr = Array.from(badPlates)
+        .map((p) => `${p}`)
+        .join('\n');
+      toastWarning(`${t('delivery.toast.invalid_so')}\n${platesStr}`);
+    }
+  }, [allRoutes, t]);
 
   const handleToggleView = (isDetail) => {
     setIsDetailView(isDetail);
@@ -95,7 +134,18 @@ export default function DeliveryPage() {
       isDetailView,
     };
 
-    if (type === 'routeTransaction') handleRouteTransactionDownload(baseProps);
+    if (type === 'routeTransaction') {
+      const { storedLocation } = getLocalStorage();
+      const activeHub = hubsData.find(
+        (h) => String(h._id) === String(storedLocation) || String(h.id) === String(storedLocation)
+      );
+
+      if (activeHub?.hasPartialRouting) {
+        setIsRoutingModalOpen(true);
+      } else {
+        handleFullRouteTransDownload(baseProps);
+      }
+    }
     if (type === 'deliveryForm') handleDeliveryFormDownload(baseProps);
     if (type === 'deliveryList') {
       let prefix = '';
@@ -299,16 +349,6 @@ export default function DeliveryPage() {
             };
           }
         );
-
-        finalRoutes.sort((a, b) => {
-          const etdA = a.trips?.find((t) => t.isHub)?.etd || null;
-          const etdB = b.trips?.find((t) => t.isHub)?.etd || null;
-          if (!etdA && etdB) return 1;
-          if (etdA && !etdB) return -1;
-          return (etdA || '').localeCompare(etdB || '');
-        });
-
-        setAllRoutes(finalRoutes);
 
         finalRoutes.sort((a, b) => {
           const etdA = a.trips?.find((t) => t.isHub)?.etd || null;
@@ -610,6 +650,31 @@ export default function DeliveryPage() {
           </div>
         </div>
       </BodyCard>
+
+      <RoutingModal
+        isOpen={isRoutingModalOpen}
+        onClose={() => setIsRoutingModalOpen(false)}
+        onPartial={() => {
+          handlePartialRouteTransDownload({
+            routingResults,
+            filteredVehicleRoutes,
+            setIsDownloading,
+            t,
+            selectedDate,
+          });
+          setIsRoutingModalOpen(false);
+        }}
+        onFull={() => {
+          handleFullRouteTransDownload({
+            filteredVehicleRoutes,
+            setIsDownloading,
+            t,
+            selectedDate,
+          });
+          setIsRoutingModalOpen(false);
+        }}
+        translate={t}
+      />
     </div>
   );
 }
