@@ -202,7 +202,7 @@ export default function Navbar() {
 
   if (!mounted) {
     return (
-      <nav className="w-full bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-4 sm:px-6 py-4 sticky top-0 z-100 shadow-sm transition-colors duration-200">
+      <nav className="w-full bg-red-300 dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-4 sm:px-6 py-4 sticky top-0 z-100 shadow-sm transition-colors duration-200">
         <div className="max-w-8xl mx-auto flex justify-between items-center px-4">
           <div className="flex items-center space-x-4 sm:space-x-6 w-full lg:w-auto">
             <Link href="/" className="flex flex-col leading-tight">
@@ -210,7 +210,7 @@ export default function Navbar() {
                 TMS SANDBOX
               </span>
               <span className="block lg:hidden text-slate-900 dark:text-slate-100 font-bold text-lg sm:text-xl">
-                TMS Data Processing
+                TMS SANDBOX
               </span>
             </Link>
           </div>
@@ -266,7 +266,7 @@ export default function Navbar() {
   );
 
   return (
-    <nav className="sticky top-0 z-100 w-full px-4 py-4 sm:px-6 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 shadow-md dark:shadow-slate-700/40 transition-colors duration-200">
+    <nav className="sticky top-0 z-100 w-full px-4 py-4 sm:px-6 bg-red-300 dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 shadow-md dark:shadow-slate-700/40 transition-colors duration-200">
       <div className="max-w-8xl mx-auto flex justify-between items-center px-4">
         <div
           className={`flex items-center space-x-4 sm:space-x-6 ${isLoggedIn ? 'flex-1 min-w-0 pr-4 lg:pr-8' : 'w-full lg:w-auto'}`}
@@ -276,7 +276,7 @@ export default function Navbar() {
               TMS SANDBOX
             </span>
             <span className="block lg:hidden text-slate-900 dark:text-slate-100 font-bold text-lg sm:text-xl">
-              TMS Data Processing
+              TMS SANDBOX
             </span>
           </Link>
 

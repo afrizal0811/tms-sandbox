@@ -252,7 +252,10 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
 
       <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 transition-colors text-left">
         <div className="flex flex-col gap-1 mb-6 text-center">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 select-none">
+          <h1
+            className="text-3xl font-bold text-slate-900 dark:text-slate-100 select-none"
+            onClick={handleSecretTrigger}
+          >
             {t('home.welcome')}
           </h1>
           <p className="text-sm text-gray-400 dark:text-slate-500">
@@ -336,10 +339,7 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
         </div>
 
         <div className="mt-4 text-right">
-          <span
-            onClick={handleSecretTrigger}
-            className="text-xs text-gray-400 dark:text-slate-500 italic cursor-default select-none pointer-events-auto block"
-          >
+          <span className="text-xs text-gray-400 dark:text-slate-500 italic cursor-default select-none pointer-events-auto block">
             *{t('home.note')}
           </span>
         </div>
