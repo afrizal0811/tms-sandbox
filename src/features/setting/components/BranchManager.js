@@ -1,15 +1,36 @@
-// File: src/features/settings/components/BranchManager.js
 'use client';
 
 import ConfirmModal from '@/components/modal/ConfirmModal';
-import { patchHubs } from '@/lib/api';
+import { patchHubs } from '@/lib/api/mileapp';
 import { toastError, toastSuccess } from '@/lib/toast';
 import { useState } from 'react';
 import Card from './Card';
-import Table from './Table';
+import CustomTable from './CustomTable';
+
+const RenderData = ({ item, translate }) => (
+  <div
+    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${item ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-900 dark:text-slate-400'}`}
+  >
+    {item ? translate('common.button.btn_yes') : translate('common.button.btn_no')}
+  </div>
+);
+
+const RenderEdit = ({ value, onChange }) => (
+  <div className="flex justify-center">
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${value ? 'bg-sky-600' : 'bg-gray-200 dark:bg-slate-700'}`}
+    >
+      <span
+        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${value ? 'translate-x-5' : 'translate-x-0'}`}
+      />
+    </button>
+  </div>
+);
 
 export default function BranchManager({ hubs, onRefresh, isReadOnly, translate }) {
-  const [deleteConfig, setDeleteConfig] = useState({ isOpen: false, id: null });
+  const [deleteConfig, setDeleteConfig] = useState({ isOpen: false, id: null, name: null });
 
   const handleSaveSettings = async (id, editValues) => {
     try {
@@ -32,16 +53,20 @@ export default function BranchManager({ hubs, onRefresh, isReadOnly, translate }
           ? Boolean(editValues.hasPartialRouting)
           : Boolean(currentHub.hasPartialRouting);
 
+      const safeVms =
+        editValues.hasVms !== undefined ? Boolean(editValues.hasVms) : Boolean(currentHub.hasVms);
+
       await patchHubs(id, {
         acronym: safeAcronym,
         hasPendingGR: safePendingGR,
         hasPartialRouting: safePartialRouting,
+        hasVms: safeVms,
       });
 
       toastSuccess(translate('common.toast.success'));
       await onRefresh();
-    } catch (err) {
-      toastError(translate('common.toast.error', { err: err.message }));
+    } catch (e) {
+      toastError(translate('common.toast.error', { err: e.message }), e);
     }
   };
 
@@ -58,7 +83,6 @@ export default function BranchManager({ hubs, onRefresh, isReadOnly, translate }
     {
       header: translate('setting.tab.general.acronym_title'),
       field: 'acronym',
-      headerClassName: 'w-20 md:w-24',
       render: (item) => (
         <span
           className={`text-[10px] md:text-sm font-bold ${item.acronym ? 'text-sky-700 dark:text-sky-400' : 'text-red-500 dark:text-red-400'}`}
@@ -69,7 +93,7 @@ export default function BranchManager({ hubs, onRefresh, isReadOnly, translate }
       renderEdit: (value, onChange) => (
         <input
           type="text"
-          value={value || ''} // Mencegah error input uncontrolled karena null
+          value={value || ''}
           onChange={(e) => onChange(e.target.value)}
           className="w-full min-w-0 px-2 py-1 text-[10px] md:text-sm bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded outline-none uppercase"
           autoFocus
@@ -79,78 +103,55 @@ export default function BranchManager({ hubs, onRefresh, isReadOnly, translate }
     {
       header: 'Pending GR',
       field: 'hasPendingGR',
-      headerClassName: 'w-24 md:w-28 text-center',
+      align: 'center',
       cellClassName: 'text-center',
-      render: (item) => (
-        <div
-          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${item.hasPendingGR ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-900 dark:text-slate-400'}`}
-        >
-          {item.hasPendingGR
-            ? translate('common.button.btn_yes')
-            : translate('common.button.btn_no')}
-        </div>
-      ),
-      renderEdit: (value, onChange) => (
-        <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={() => onChange(!value)}
-            className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${value ? 'bg-sky-600' : 'bg-gray-200 dark:bg-slate-700'}`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${value ? 'translate-x-5' : 'translate-x-0'}`}
-            />
-          </button>
-        </div>
-      ),
+      render: (item) => <RenderData item={item.hasPendingGR} translate={translate} />,
+      renderEdit: (value, onChange) => <RenderEdit value={value} onChange={onChange} />,
     },
+    // {
+    //   header: translate('setting.tab.general.partial_routing_title'),
+    //   field: 'hasPartialRouting',
+    //   align: 'center',
+    //   cellClassName: 'text-center',
+    //   render: (item) => <RenderData item={item.hasPartialRouting} translate={translate} />,
+    //   renderEdit: (value, onChange) => <RenderEdit value={value} onChange={onChange} />,
+    // },
     {
-      header: 'Partial Routing',
-      field: 'hasPartialRouting',
-      headerClassName: 'w-24 md:w-28 text-center',
+      header: translate('setting.tab.general.vms_data_title'),
+      field: 'hasVms',
+      align: 'center',
       cellClassName: 'text-center',
-      render: (item) => (
-        <div
-          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${item.hasPartialRouting ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-900 dark:text-slate-400'}`}
-        >
-          {item.hasPartialRouting
-            ? translate('common.button.btn_yes')
-            : translate('common.button.btn_no')}
-        </div>
-      ),
-      renderEdit: (value, onChange) => (
-        <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={() => onChange(!value)}
-            className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${value ? 'bg-sky-600' : 'bg-gray-200 dark:bg-slate-700'}`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${value ? 'translate-x-5' : 'translate-x-0'}`}
-            />
-          </button>
-        </div>
-      ),
+      render: (item) => <RenderData item={item.hasVms} translate={translate} />,
+      renderEdit: (value, onChange) => <RenderEdit value={value} onChange={onChange} />,
     },
   ];
-  const title = translate('setting.tab.general.branch_title');
+
+  const msgParts = translate('common.modal.confirm_message', { text: '|||' }).split('|||');
+
   return (
     <Card>
       <ConfirmModal
         isOpen={deleteConfig.isOpen}
-        onCancel={() => setDeleteConfig({ isOpen: false, id: null })}
+        onCancel={() => setDeleteConfig({ isOpen: false, id: null, name: null })}
         onConfirm={async () => {
           await handleSaveSettings(deleteConfig.id, {
             acronym: '',
             hasPendingGR: false,
             hasPartialRouting: false,
+            hasVms: false,
           });
-          setDeleteConfig({ isOpen: false, id: null });
+          setDeleteConfig({ isOpen: false, id: null, name: null });
         }}
-        title={translate('common.modal.confirm_title', { text: title })}
-        message={translate('common.modal.confirm_message', {
-          text: title.toLowerCase(),
+        title={translate('common.modal.confirm_title', {
+          text: translate('setting.tab.general.branch_title'),
         })}
+        message={
+          <span>
+            {msgParts[0]}
+            <strong>{deleteConfig.name}</strong>
+            {msgParts[1]}
+          </span>
+        }
       />
 
       <div className="mb-4 border-b border-gray-100 dark:border-slate-800 pb-3">
@@ -162,14 +163,16 @@ export default function BranchManager({ hubs, onRefresh, isReadOnly, translate }
         </p>
       </div>
 
-      <Table
+      <CustomTable
         data={hubs}
         columns={columns}
         isReadOnly={isReadOnly}
         containerHeight="h-[408px]"
         translate={translate}
         onSave={handleSaveSettings}
-        onDelete={(item) => setDeleteConfig({ isOpen: true, id: item.id || item._id })}
+        onDelete={(item) =>
+          setDeleteConfig({ isOpen: true, id: item.id || item._id, name: item.name })
+        }
       />
     </Card>
   );

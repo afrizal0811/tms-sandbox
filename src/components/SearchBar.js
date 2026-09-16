@@ -1,5 +1,7 @@
 // File: src/components/SearchBar.js
 'use client';
+import { useState } from 'react';
+import Tooltip from './Tooltip';
 
 export default function SearchBar({
   value,
@@ -7,13 +9,25 @@ export default function SearchBar({
   placeholder = 'Search...',
   className = 'w-full',
   disabled = false,
-  width = 'w-full xl:w-[250px]! ',
+  width = 'w-full xl:w-[250px]!',
+  size = 'lg',
+  tooltip,
+  suggestions = [],
+  onSelectSuggestion,
 }) {
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const sizeClasses = {
+    sm: { icon: 'h-3 w-3', input: 'text-xs h-[30px]' },
+    md: { icon: 'h-4 w-4', input: 'text-sm h-[34px]' },
+    lg: { icon: 'h-5 w-5', input: 'text-base h-[42px]' },
+  };
+
   return (
     <div className={`relative shrink-0 ${className} ${width}`}>
       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
         <svg
-          className="h-5 w-5 text-gray-400 dark:text-slate-500"
+          className={`${sizeClasses[size].icon} text-gray-400 dark:text-slate-500`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -26,15 +40,21 @@ export default function SearchBar({
           />
         </svg>
       </div>
-
-      <input
-        type="text"
-        className="w-full pl-10 pr-10 h-[42px] border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-colors disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-slate-800/50 disabled:text-gray-400 dark:disabled:text-slate-500"
-        placeholder={placeholder}
-        disabled={disabled}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <Tooltip tooltipContent={tooltip ? tooltip : ''}>
+        <input
+          type="text"
+          className={`w-full pl-10 pr-10 ${sizeClasses[size].input} border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-colors disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-slate-800/50 disabled:text-gray-400 dark:disabled:text-slate-500`}
+          placeholder={placeholder}
+          disabled={disabled}
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setShowSuggestions(true);
+          }}
+          onFocus={() => setShowSuggestions(true)}
+          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+        />
+      </Tooltip>
 
       {value && (
         <button
@@ -55,6 +75,23 @@ export default function SearchBar({
             />
           </svg>
         </button>
+      )}
+
+      {showSuggestions && suggestions?.length > 0 && (
+        <ul className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-slate-800 rounded shadow-md z-50 max-h-48 overflow-y-auto text-xs text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-slate-700">
+          {suggestions.map((s, idx) => (
+            <li
+              key={s.key || idx}
+              className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer"
+              onClick={() => {
+                if (onSelectSuggestion) onSelectSuggestion(s.raw);
+                setShowSuggestions(false);
+              }}
+            >
+              {s.label}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

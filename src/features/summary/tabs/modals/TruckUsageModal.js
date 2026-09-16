@@ -1,11 +1,10 @@
-import BaseModal from '@/components/BaseModal';
 import ConfirmModal from '@/components/modal/ConfirmModal';
-import { deleteTruckUsage, postTruckUsage } from '@/lib/api';
+import Modal from '@/components/modal/Modal';
+import { deleteTruckUsage, postTruckUsage } from '@/lib/api/mileapp';
 import { toastError, toastSuccess } from '@/lib/toast';
 import { formatLongDate, getBasePlate } from '@/lib/utils';
 import { useEffect, useMemo, useState } from 'react';
 
-// --- HELPER COMPONENTS & FUNCTIONS ---
 const EmptyState = ({ translate }) => (
   <div className="text-center text-slate-400 dark:text-slate-500 text-sm py-6 italic border border-dashed border-gray-300 dark:border-slate-700 rounded-lg bg-gray-50 dark:bg-slate-800/50">
     {translate('common.no_data')}
@@ -38,7 +37,6 @@ export default function TruckUsageModal({
   localeCode,
   masterVehicleList,
 }) {
-  // --- STATES ---
   const [count, setCount] = useState('');
   const [desc, setDesc] = useState('');
   const [initialCount, setInitialCount] = useState('');
@@ -47,7 +45,6 @@ export default function TruckUsageModal({
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
 
-  // --- EFFECTS ---
   useEffect(() => {
     if (isOpen) {
       setShowAll(false);
@@ -66,7 +63,6 @@ export default function TruckUsageModal({
     }
   }, [data]);
 
-  // --- MEMOIZED DATA PROCESSORS ---
   const sortedMasterVehicles = useMemo(() => {
     if (!data?.isMaster) return [];
     const vehicles = masterVehicleList?.[data.storage]?.[data.type] || [];
@@ -76,16 +72,25 @@ export default function TruckUsageModal({
   const tmsDetailsList = useMemo(() => {
     if (!data?.isTms) return [];
 
-    let details = (data.tmsDetails || []).map((vh) => {
-      const emailToMatch = (vh.driver || '').toLowerCase();
-      const matchedDriver = (driverData || []).find(
-        (d) => (d.email || '').toLowerCase() === emailToMatch
-      );
-      return {
-        ...vh,
-        driverName: matchedDriver?.name ? matchedDriver.name : vh.driver,
-      };
+    const driverLookup = new Map();
+    (driverData || []).forEach((d) => {
+      if (d.email) driverLookup.set(d.email.toLowerCase().trim(), d.name);
     });
+
+    const seenCombos = new Set();
+
+    let details = (data.tmsDetails || []).reduce((acc, vh) => {
+      const emailToMatch = (vh.driver || '').toLowerCase().trim();
+      const driverName = driverLookup.get(emailToMatch) || vh.driver;
+      const plateRaw = vh.plate || vh.plat || '';
+
+      const comboKey = `${emailToMatch}_${plateRaw}`;
+      if (!seenCombos.has(comboKey)) {
+        seenCombos.add(comboKey);
+        acc.push({ ...vh, driverName, plate: plateRaw });
+      }
+      return acc;
+    }, []);
 
     if (showAll && masterVehicleList) {
       const masterCat = masterVehicleList[data.storage]?.[data.type] || [];
@@ -105,7 +110,6 @@ export default function TruckUsageModal({
 
   if (!data) return null;
 
-  // --- HANDLERS ---
   const handleSave = async () => {
     setIsLoading(true);
     try {
@@ -122,7 +126,7 @@ export default function TruckUsageModal({
       onSuccess(resData.data ? resData.data : resData);
       onClose();
     } catch (e) {
-      toastError(translate('common.toast.error', { err: e.message }));
+      toastError(translate('common.toast.error', { err: e.message }), e);
     } finally {
       setIsLoading(false);
     }
@@ -144,27 +148,17 @@ export default function TruckUsageModal({
       onSuccess({ id: data.id, isDelete: true });
       onClose();
     } catch (e) {
-      toastError(translate('common.toast.error', { err: e.message }));
+      toastError(translate('common.toast.error', { err: e.message }), e);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // --- RENDER BLOCKS ---
   const renderMasterVehicle = () => {
     const modalTitle = `Master - ${data.storage} (${data.type === 'Gabungan' ? 'Total' : data.type})`;
 
     return (
-      <BaseModal
-        isOpen={isOpen}
-        onClose={onClose}
-        maxWidth="max-w-md"
-        title={
-          <div className="flex flex-col gap-0.5">
-            <span>{modalTitle}</span>
-          </div>
-        }
-      >
+      <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-md" title={modalTitle}>
         <div className="flex flex-col gap-3 pt-2 pb-2">
           <div className="bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 text-sm px-3 py-2.5 rounded-md border border-sky-100 dark:border-sky-800 flex justify-between items-center">
             <span>Total</span>
@@ -204,7 +198,7 @@ export default function TruckUsageModal({
             )}
           </div>
         </div>
-      </BaseModal>
+      </Modal>
     );
   };
 
@@ -216,20 +210,12 @@ export default function TruckUsageModal({
     }
 
     return (
-      <BaseModal
+      <Modal
         isOpen={isOpen}
         onClose={onClose}
         maxWidth="max-w-md"
-        title={
-          <div className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-2">
-              <span>{modalTitle}</span>
-            </div>
-            <span className="text-sm font-normal opacity-70">
-              {formatLongDate(data.date, localeCode)}
-            </span>
-          </div>
-        }
+        title={modalTitle}
+        subtitle={formatLongDate(data.date, localeCode)}
       >
         <div className="flex flex-col gap-3 pt-2 pb-2">
           <div className="bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 text-sm px-3 py-2.5 rounded-md border border-sky-100 dark:border-sky-800 flex justify-between items-center">
@@ -290,7 +276,7 @@ export default function TruckUsageModal({
             )}
           </div>
         </div>
-      </BaseModal>
+      </Modal>
     );
   };
 
@@ -301,6 +287,8 @@ export default function TruckUsageModal({
     const isChanged = count !== initialCount || desc !== initialDesc;
     const isSaveDisabled = isLoading || count === '' || !desc.trim() || !isChanged;
 
+    const msgParts = translate('common.modal.confirm_message', { text: '|||' }).split('|||');
+
     return (
       <>
         <ConfirmModal
@@ -308,23 +296,21 @@ export default function TruckUsageModal({
           onCancel={() => setIsConfirmOpen(false)}
           onConfirm={handleDelete}
           title={translate('common.modal.confirm_title', { text: 'data' })}
-          message={translate('common.modal.confirm_message', { text: 'data' })}
+          message={
+            <span>
+              {msgParts[0]}
+              <strong>Non TMS data</strong>
+              {msgParts[1]}
+            </span>
+          }
         />
 
-        <BaseModal
+        <Modal
           isOpen={isOpen && !isConfirmOpen}
           onClose={onClose}
           maxWidth="max-w-md"
-          title={
-            <div className="flex flex-col gap-0.5">
-              <span>
-                Non TMS - {data.storage} ({data.type})
-              </span>
-              <span className="text-sm font-normal opacity-70">
-                {formatLongDate(data.date, localeCode)}
-              </span>
-            </div>
-          }
+          title={`Non TMS - ${data.storage} (${data.type})`}
+          subtitle={formatLongDate(data.date, localeCode)}
           footer={
             <div className="flex justify-between items-center w-full">
               <div>
@@ -395,12 +381,11 @@ export default function TruckUsageModal({
               ></textarea>
             </div>
           </div>
-        </BaseModal>
+        </Modal>
       </>
     );
   };
 
-  // --- MAIN RENDER ROUTER ---
   if (data.isMaster) return renderMasterVehicle();
   if (data.isTms) return renderTmsVehicle();
   return renderManualForm();

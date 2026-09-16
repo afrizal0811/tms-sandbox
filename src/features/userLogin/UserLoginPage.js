@@ -1,10 +1,10 @@
 'use client';
 
-import LocationDropdown from '@/components/LocationDropdown';
+import LocationSelector from '@/components/dropdown/LocationDropdown';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import VehicleTagMappingModal from '@/components/modal/VehicleTagMappingModal';
 import Spinner from '@/components/Spinner';
-import { getRoles, getUser } from '@/lib/api';
+import { getRoles, getUsers } from '@/lib/api/mileapp';
 import { useVehicleTagCheck } from '@/lib/hooks/useVehicleTagCheck';
 import { getLocalStorage, setLocalStorage } from '@/lib/localStorageHandler';
 import { toastError, toastSuccess } from '@/lib/toast';
@@ -16,13 +16,11 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
   const [selectedLocationName, setSelectedLocationName] = useState('');
   const [tempSelectedLocation, setTempSelectedLocation] = useState('');
   const [tempSelectedLocationName, setTempSelectedLocationName] = useState('');
-
   const [emailInput, setEmailInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [userToConfirm, setUserToConfirm] = useState(null);
-
-  const [titleClicks, setTitleClicks] = useState(0);
+  const [secretClicks, setSecretClicks] = useState(0);
   const [isSecretMode, setIsSecretMode] = useState(false);
 
   const { showModal, unmappedData, triggerCheck, handleMappingCompleted } = useVehicleTagCheck();
@@ -38,14 +36,12 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
   }, []);
 
   useEffect(() => {
-    if (titleClicks === 0 || isSecretMode) return;
-
+    if (secretClicks === 0 || isSecretMode) return;
     const timer = setTimeout(() => {
-      setTitleClicks(0);
+      setSecretClicks(0);
     }, 3000);
-
     return () => clearTimeout(timer);
-  }, [titleClicks, isSecretMode]);
+  }, [secretClicks, isSecretMode]);
 
   const handleLocationChange = (id, name) => {
     setTempSelectedLocation(id);
@@ -54,7 +50,6 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
 
   const handleSaveLocation = () => {
     if (!tempSelectedLocation) return toastError(t('home.select_branch'));
-
     const selectedHubObj = allHubsList.find((h) => h._id === tempSelectedLocation);
     const { storedSession } = getLocalStorage();
     const currentData = storedSession || {};
@@ -69,7 +64,6 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
 
     const newSession = { ...currentData, user: userObj };
     setLocalStorage('data', JSON.stringify(newSession));
-
     setSelectedLocation(tempSelectedLocation);
     setSelectedLocationName(tempSelectedLocationName);
   };
@@ -81,7 +75,6 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
       delete newSession.user;
       setLocalStorage('data', JSON.stringify(newSession));
     }
-
     setSelectedLocation('');
     setSelectedLocationName('');
     setEmailInput('');
@@ -89,31 +82,32 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
     setTempSelectedLocationName('');
   };
 
-  const handleTitleClick = () => {
+  const handleSecretTrigger = () => {
     if (isSecretMode) return;
-
-    const nextClicks = titleClicks + 1;
+    const nextClicks = secretClicks + 1;
     if (nextClicks === 3) {
       setIsSecretMode(true);
+      if (typeof window !== 'undefined') {
+        window.SECRET_MODE_ACTIVE = true;
+        window.dispatchEvent(new Event('secret_update'));
+      }
       toastSuccess(t('home.toast.active'));
-      setTitleClicks(0);
+      setSecretClicks(0);
     } else {
-      setTitleClicks(nextClicks);
+      setSecretClicks(nextClicks);
     }
   };
 
   const handleSearchUser = async (e) => {
     e.preventDefault();
     if (!emailInput) return;
-
     if (!selectedLocation) {
       toastError(t('home.toast.no_session'));
       return;
     }
-
     setLoading(true);
     try {
-      const response = await getUser(emailInput, selectedLocation);
+      const response = await getUsers(selectedLocation, emailInput);
       let usersArray = [];
       if (Array.isArray(response)) {
         usersArray = response;
@@ -163,7 +157,7 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
       setUserToConfirm(foundUser);
       setIsConfirmOpen(true);
     } catch (err) {
-      toastError(t('common.toast.error', { err: err.message }));
+      toastError(t('common.toast.error', { err: err.message }), err);
     } finally {
       setLoading(false);
     }
@@ -186,6 +180,15 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
         const { storedSession } = getLocalStorage();
         const currentData = storedSession || {};
 
+        let rolePaths = [];
+        try {
+          const roles = await getRoles();
+          const userRole = (roles || []).find(
+            (r) => String(r._id || r.id) === String(userToConfirm.roleId)
+          );
+          rolePaths = userRole?.paths || [];
+        } catch (e) {}
+
         const filteredUserSession = {
           _id: userToConfirm._id,
           email: userToConfirm.email,
@@ -193,6 +196,7 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
           hubId: userToConfirm.hubId,
           roleId: userToConfirm.roleId,
           status: userToConfirm.status,
+          paths: rolePaths,
           activeHubId: selectedLocation,
           activeHubName: selectedLocationName,
           activeHubAcronym: selectedHubObj?.acronym || '',
@@ -207,7 +211,7 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
         handleUserSelect(filteredUserSession);
         toastSuccess(t('home.toast.login_success'));
       } catch (err) {
-        toastError(t('home.toast.login_failed', { err: err.message }));
+        toastError(t('home.toast.login_failed', { err: err.message }), err);
       }
     });
     setLoading(false);
@@ -218,14 +222,13 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
     return (
       <div className="flex flex-col items-center">
         <Spinner />
-        <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">{t('common.loading')}</p>
       </div>
     );
   }
 
   const modalMessage = (
     <div className="flex flex-col gap-2">
-      <div className="text-slate-200">
+      <div>
         {t('home.modal.question')}{' '}
         <span className="font-bold">{capitalizeText(userToConfirm?.name || '')}</span>?
       </div>
@@ -249,10 +252,7 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
 
       <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 transition-colors text-left">
         <div className="flex flex-col gap-1 mb-6 text-center">
-          <h1
-            onClick={handleTitleClick}
-            className="text-3xl font-bold text-slate-900 dark:text-slate-100 select-none"
-          >
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 select-none">
             {t('home.welcome')}
           </h1>
           <p className="text-sm text-gray-400 dark:text-slate-500">
@@ -268,14 +268,12 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
             {t('home.select_branch')}
           </label>
           <div className="flex gap-2">
-            <LocationDropdown
-              value={tempSelectedLocation}
-              onChange={handleLocationChange}
-              hubsToShow={currentHubListView || allHubsList}
-              className="flex-1 p-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm disabled:opacity-35 disabled:pointer-events-none"
-              placeholder={`-- ${t('common.select')} ${t('common.branch')}--`}
-              translate={t}
+            <LocationSelector
+              className="flex-1 text-sm disabled:opacity-35 disabled:pointer-events-none"
               disabled={!!selectedLocation}
+              hubsToShow={currentHubListView || allHubsList}
+              onChange={handleLocationChange}
+              value={tempSelectedLocation}
             />
             {!selectedLocation ? (
               <button
@@ -304,9 +302,6 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
           {loading ? (
             <div className="flex flex-col items-center py-4">
               <Spinner />
-              <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
-                {t('common.loading')}
-              </p>
             </div>
           ) : (
             <form onSubmit={handleSearchUser} className="flex flex-col gap-4">
@@ -338,12 +333,15 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
               </button>
             </form>
           )}
+        </div>
 
-          <div className="mt-4 text-right">
-            <span className="text-xs text-gray-400 dark:text-slate-500 italic">
-              *{t('home.note')}
-            </span>
-          </div>
+        <div className="mt-4 text-right">
+          <span
+            onClick={handleSecretTrigger}
+            className="text-xs text-gray-400 dark:text-slate-500 italic cursor-default select-none pointer-events-auto block"
+          >
+            *{t('home.note')}
+          </span>
         </div>
       </div>
 

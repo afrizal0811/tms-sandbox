@@ -1,10 +1,10 @@
-// File: src/features/summary/tabs/modals/PendingReasonModal.js
 'use client';
 
-import BaseModal from '@/components/BaseModal';
 import ConfirmModal from '@/components/modal/ConfirmModal';
-import { deletePendingDetail, postPendingDetail } from '@/lib/api'; // Pastikan deletePendingDetail diimport
+import Modal from '@/components/modal/Modal';
+import { deletePendingDetail, postPendingDetail } from '@/lib/api/mileapp';
 import { toastError, toastSuccess } from '@/lib/toast';
+import { capitalizeText } from '@/lib/utils';
 import { useEffect, useMemo, useState } from 'react';
 
 export default function PendingReasonModal({
@@ -36,7 +36,6 @@ export default function PendingReasonModal({
     }
   }, [data]);
 
-  // Logika untuk mengurutkan (ascending) dan mencari Group Reason yang duplikat
   const { sortedReasons, reasonCounts } = useMemo(() => {
     if (!reasons || reasons.length === 0) return { sortedReasons: [], reasonCounts: {} };
 
@@ -68,7 +67,7 @@ export default function PendingReasonModal({
     setIsLoading(true);
     try {
       const dateParts = data.dateStr.split('-');
-      const dbDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`; // YYYY-MM-DD
+      const dbDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
 
       const payload = {
         taskId: data._id,
@@ -84,25 +83,23 @@ export default function PendingReasonModal({
       onSuccess(res.data || res);
       onClose();
     } catch (e) {
-      toastError(translate('common.toast.error', { err: e.message }));
+      toastError(translate('common.toast.error', { err: e.message }), e);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // PERUBAHAN: Fungsi Delete sekarang menghapus dari Database secara permanen
   const handleDelete = async () => {
     setIsConfirmOpen(false);
     setIsLoading(true);
     try {
-      await deletePendingDetail(data._id); // Hapus dengan memanggil API Delete
+      await deletePendingDetail(data._id);
       toastSuccess(translate('common.toast.success'));
 
-      // Kirim indikator 'deleted: true' ke parent
       onSuccess({ taskId: data._id, deleted: true });
       onClose();
     } catch (e) {
-      toastError(translate('common.toast.error', { err: e.message }));
+      toastError(translate('common.toast.error', { err: e.message }), e);
     } finally {
       setIsLoading(false);
     }
@@ -119,30 +116,31 @@ export default function PendingReasonModal({
       data.pendingDetail.pic);
 
   const statusText = data.statusDelivery ? data.statusDelivery[0] : data.status;
-  const title = translate('summary.tabs.pending_reasons.modal_title');
+  const msgParts = translate('common.modal.confirm_message', { text: '|||' }).split('|||');
+
   return (
     <>
       <ConfirmModal
         isOpen={isConfirmOpen}
         onCancel={() => setIsConfirmOpen(false)}
         onConfirm={handleDelete}
-        title={translate('common.modal.confirm_title', { text: title })}
-        message={translate('common.modal.confirm_message', {
-          text: title.toLowerCase(),
+        title={translate('common.modal.confirm_title', {
+          text: translate('summary.tabs.pending_reasons.modal_title'),
         })}
+        message={
+          <span>
+            {msgParts[0]}
+            <strong>pending data</strong>
+            {msgParts[1]}
+          </span>
+        }
       />
-      <BaseModal
-        isOpen={isOpen}
+      <Modal
+        isOpen={isOpen && !isConfirmOpen}
         onClose={onClose}
         maxWidth="max-w-lg"
-        title={
-          <div className="flex flex-col gap-0.5">
-            <span>{title}</span>
-            <span className="text-sm font-normal opacity-70">
-              {statusText} | {data.customer}
-            </span>
-          </div>
-        }
+        title={translate('summary.tabs.pending_reasons.modal_title')}
+        subtitle={`${capitalizeText(statusText)} | ${data.customer}`}
         footer={
           <div className="flex justify-between items-center w-full">
             <div>
@@ -246,7 +244,7 @@ export default function PendingReasonModal({
             ></textarea>
           </div>
         </div>
-      </BaseModal>
+      </Modal>
     </>
   );
 }

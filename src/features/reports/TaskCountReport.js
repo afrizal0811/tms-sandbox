@@ -1,10 +1,10 @@
 'use client';
 
-import Button from '@/components/Button';
+import Button from '@/components/button/Button';
+import InformationButton from '@/components/button/InformationButton';
 import CustomDatePicker from '@/components/CustomDatePicker';
-import Tooltip from '@/components/Tooltip';
 import { useLanguage } from '@/context/LanguageContext';
-import { getTasks, getTrash } from '@/lib/api';
+import { getTasks, getTrash } from '@/lib/api/mileapp';
 import { getCachedHubs } from '@/lib/localStorageHandler';
 import { generateTaskCountWorkbook } from '@/lib/reportGenerators/reports';
 import { toastError, toastSuccess, toastWarning } from '@/lib/toast';
@@ -29,7 +29,7 @@ export default function TaskCountReport() {
         setHubs(cached || []);
         setSelectedHubs((cached || []).map((h) => h._id));
       } catch (err) {
-        toastError(t('common.toast.error', { err: err.message }));
+        toastError(t('common.toast.error', { err: err.message }), err);
       }
     };
     loadHubs();
@@ -103,8 +103,6 @@ export default function TaskCountReport() {
           hubId: hubIdsStr,
           timeFrom,
           timeTo,
-          timeBy: 'startTime',
-          limit: 1000,
         });
 
         const chunkData = Array.isArray(response) ? response : response?.data || [];
@@ -114,7 +112,7 @@ export default function TaskCountReport() {
 
       let filteredTrashTasks = [];
       try {
-        const trashResponse = await getTrash(1000);
+        const trashResponse = await getTrash();
         const trashData = Array.isArray(trashResponse) ? trashResponse : trashResponse?.data || [];
 
         trashData.forEach((item) => {
@@ -132,7 +130,7 @@ export default function TaskCountReport() {
                 }
               }
             } catch (e) {
-              console.error('Trash parsing error:', e);
+              toastError(t('common.toast.error', { err: e.message }), e);
             }
           }
         });
@@ -175,7 +173,7 @@ export default function TaskCountReport() {
       XLSX.writeFile(wb, fileName);
       toastSuccess(t('common.toast.success'));
     } catch (err) {
-      toastError(t('common.toast.error', { err: err.message }));
+      toastError(t('common.toast.error', { err: err.message }), err);
     } finally {
       setIsLoading(false);
     }
@@ -186,31 +184,10 @@ export default function TaskCountReport() {
   const startHelp = new Date(yHelp, mHelp, 24, 8, 34, 0);
   const endHelp = new Date(yHelp, mHelp + 1, 24, 8, 34, 0);
 
-  const informationComp = (tooltipContent) => (
-    <Tooltip tooltipContent={tooltipContent}>
-      <span className="flex items-center">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="16" x2="12" y2="12" />
-          <line x1="12" y1="8" x2="12.01" y2="8" />
-        </svg>
-      </span>
-    </Tooltip>
-  );
-
   return (
     <div className="w-full max-w-5xl mx-auto p-4 sm:p-6 animate-in fade-in duration-300">
       <h1 className="text-3xl font-bold mb-6 text-slate-900 dark:text-slate-100">
-        {t('report.task_counter_report')}
+        {t('report.task_count.title')}
       </h1>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 flex flex-col gap-6 transition-colors">
@@ -223,14 +200,14 @@ export default function TaskCountReport() {
               disabled={isLoading}
               className="w-4 h-4 rounded bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600 cursor-pointer"
             />
-            {t('report.tc_detail.custom_time')}
+            {t('report.task_count.custom_time')}
           </label>
         </div>
 
         {!isCustomMode ? (
           <div className="flex flex-col max-w-sm mx-auto w-full">
             <label className="text-sm font-semibold text-gray-600 dark:text-slate-300 mb-2">
-              {t('report.tc_detail.date_range')}
+              {t('report.task_count.date_range')}
             </label>
             <CustomDatePicker
               selected={selectedMonth}
@@ -248,7 +225,7 @@ export default function TaskCountReport() {
               <strong className="text-slate-700 dark:text-slate-300">
                 {formatLongDate(endHelp, localeCode)} 08:34 WIB
               </strong>
-              {informationComp(t('report.tooltip.cut_off'))}
+              <InformationButton infoText={t('report.tooltip.cut_off')} />
             </p>
           </div>
         ) : (
@@ -285,7 +262,7 @@ export default function TaskCountReport() {
         <div className="flex flex-col border border-gray-300 dark:border-slate-600 rounded-lg overflow-hidden transition-colors mt-2">
           <div className="bg-gray-50 dark:bg-slate-700/50 p-4 border-b border-gray-300 dark:border-slate-600 flex justify-between items-center transition-colors">
             <span className="font-semibold text-sm text-slate-800 dark:text-slate-200">
-              {t('report.tc_detail.choose_hub')}
+              {t('report.task_count.choose_hub')}
             </span>
             <label className="flex items-center gap-2 cursor-pointer text-sm font-bold select-none">
               <input

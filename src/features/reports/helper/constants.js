@@ -1,4 +1,4 @@
-export const taskDetailHeaders = [
+export const taskHeaders = [
   '_id',
   'flow',
   'flowId',
@@ -105,7 +105,7 @@ export const taskDetailHeaders = [
   'routingResultId',
 ];
 
-export const taskDetailKeyMapping = {
+export const taskKeyMapping = {
   _id: '_id',
   flow: 'flow',
   flowId: 'flowId',
@@ -212,4 +212,41 @@ export const taskDetailKeyMapping = {
   routingResultId: 'routingResultId',
 };
 
+export const taskManualHeaders = [...taskHeaders, 'isManual', 'Manual Type', 'Action'];
 
+export const taskManualKeyMapping = {
+  ...taskKeyMapping,
+  isManual: 'isManual',
+  'Manual Type': 'manualType',
+  Action: 'action',
+};
+
+export const serviceLevelHeaders = [
+  'Flow',
+  'Driver Name',
+  'License Number',
+  'Customer Name',
+  'Customer ID',
+  'Location ID',
+  'Invoice Number',
+  'Status Delivery',
+  'Created Time',
+  'Assigned Time',
+  'Started Trip Time',
+  'Arrived Time',
+  'Completed Time',
+  'Service Level',
+];
+
+export const tripActivityHeaders = [
+  'tripId',
+  'assignedVehicleId',
+  'username',
+  'assignedVehicle',
+  'startTrip',
+  'startTripCoordinate',
+  'endTrip',
+  'endTripCoordinate',
+  'totalDistance',
+  'totalDuration',
+];

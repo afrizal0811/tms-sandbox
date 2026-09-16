@@ -5,7 +5,7 @@ import UploadArea from './UploadArea';
 import { tutorialData } from './helper/tutorialData';
 import { validateRoutingFile, validateTaskFile } from './helper/validator';
 
-export default function FileUploader({ labelKey, files, onUpdateFiles, inputId, tutorialKey = 'routing' }) {
+export default function FileUploader({ labelKey, files, onUpdateFiles, inputId, tutorialKey }) {
   const { t } = useLanguage();
   const validator = tutorialKey === 'routing' ? validateRoutingFile : validateTaskFile;
   return (
@@ -16,7 +16,7 @@ export default function FileUploader({ labelKey, files, onUpdateFiles, inputId, 
       <UploadArea files={files} onUpdateFiles={onUpdateFiles} validator={validator} id={inputId} />
       {tutorialData(t)[tutorialKey] && (
         <Accordion title={`Tutorial ${t(`common.${labelKey}`)}`} className="mt-2">
-          <Carousel items={tutorialData(t)[tutorialKey]} />
+          <Carousel items={tutorialData(t)[tutorialKey]} noLoop={true} />
         </Accordion>
       )}
     </div>

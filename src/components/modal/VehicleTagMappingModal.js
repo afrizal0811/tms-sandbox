@@ -1,8 +1,8 @@
 'use client';
 
-import BaseModal from '@/components/BaseModal';
-import Button from '@/components/Button';
-import { getVehicleTypes, postVehicleMappings } from '@/lib/api';
+import Button from '@/components/button/Button';
+import Modal from '@/components/modal/Modal';
+import { getVehicleTypes, postVehicleMappings } from '@/lib/api/mileapp';
 import { toastError } from '@/lib/toast';
 import { useEffect, useState } from 'react';
 
@@ -18,7 +18,7 @@ export default function VehicleTagMappingModal({ unmappedData, onCompleted, t })
         const types = await getVehicleTypes();
         setVehicleTypes(types.map((type) => type.name));
       } catch (error) {
-        toastError(t('common.toast.error', { err: error.message }));
+        toastError(t('common.toast.error', { err: error.message }), error);
       } finally {
         setIsLoading(false);
       }
@@ -42,7 +42,7 @@ export default function VehicleTagMappingModal({ unmappedData, onCompleted, t })
       }
       onCompleted();
     } catch (error) {
-      toastError(t('common.toast.error', { err: error.message }));
+      toastError(t('common.toast.error', { err: error.message }), error);
     } finally {
       setIsSaving(false);
     }
@@ -63,15 +63,10 @@ export default function VehicleTagMappingModal({ unmappedData, onCompleted, t })
   );
 
   return (
-    <BaseModal
+    <Modal
       isOpen={true}
-      onClose={() => {}}
-      title={
-        <div>
-          <h2 className="text-xl font-bold">{t('common.warning')}</h2>
-          <p className="text-sm mt-1 font-normal">{t('vehicle_tag.description')}</p>
-        </div>
-      }
+      title={t('common.warning')}
+      subtitle={t('vehicle_tag.description')}
       maxWidth="max-w-3xl"
       footer={footerContent}
       noClose={true}
@@ -150,6 +145,6 @@ export default function VehicleTagMappingModal({ unmappedData, onCompleted, t })
           ))
         )}
       </div>
-    </BaseModal>
+    </Modal>
   );
 }

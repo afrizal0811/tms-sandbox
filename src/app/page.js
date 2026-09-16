@@ -1,13 +1,13 @@
 'use client';
 
-import AppLayout from '@/components/AppLayout';
-import ErrorPage from '@/components/ErrorPage';
-import SelectionLayout from '@/components/SelectionLayout';
+import AppLayout from '@/components/page/AppLayout';
+import ErrorPage from '@/components/page/ErrorPage';
+import SelectionLayout from '@/components/page/SelectionLayout';
 import Spinner from '@/components/Spinner';
 import { useLanguage } from '@/context/LanguageContext';
 import Dashboard from '@/features/dashboard/Dashboard';
 import UserLoginPage from '@/features/userLogin/UserLoginPage';
-import { getHubs } from '@/lib/api';
+import { getHubs } from '@/lib/api/mileapp';
 import {
   getCachedHubs,
   getLocalStorage,
@@ -94,7 +94,7 @@ export default function Home() {
         }
       } catch (e) {
         setPageError(e.message);
-        toastError(e.message);
+        toastError(t('common.toast.error', { err: e.message }), e);
       } finally {
         setIsLoading(false);
       }
@@ -107,12 +107,12 @@ export default function Home() {
       try {
         const data = await getDriverData(selectedLocation);
         setDriverData({ data: data });
-      } catch (err) {
-        toastError(err);
+      } catch (e) {
+        toastError(t('common.toast.error', { err: e.message }), e);
       }
     }
     if (selectedLocation) fetchDriverData();
-  }, [selectedLocation]);
+  }, [selectedLocation, t]);
 
   const handleUserSelect = (user) => {
     setSelectedUser(user);

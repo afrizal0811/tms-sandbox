@@ -1,16 +1,16 @@
 'use client';
 
-import BaseModal from '@/components/BaseModal';
+import Modal from '@/components/modal/Modal';
+import Spinner from '@/components/Spinner';
 import { useLanguage } from '@/context/LanguageContext';
 import { formatLongDate } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
 
 const MapLoader = () => {
-  const { t } = useLanguage();
   return (
-    <div className="h-full w-full flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 font-medium">
-      {t('common.loading')}...
+    <div className="h-full w-full flex items-center justify-center font-medium">
+      <Spinner />
     </div>
   );
 };
@@ -27,7 +27,7 @@ export default function CustomerHistoryModal({
   customerData,
   selectedDate,
 }) {
-  const { t, localeCode } = useLanguage();
+  const { t, localeCode, isIndonesian } = useLanguage();
 
   const mapData = useMemo(() => {
     if (!data) return [];
@@ -36,24 +36,12 @@ export default function CustomerHistoryModal({
 
   if (!isOpen) return null;
 
-  const headerContent = (
-    <div>
-      <h3 className="text-lg font-bold">
-        {t('longlat.modal.title')} ({formatLongDate(selectedDate, localeCode)})
-      </h3>
-      <div className="flex mt-1 font-normal">
-        <p className="text-sm text-slate-500 dark:text-slate-300 font-small break-all">
-          {customerData}
-        </p>
-      </div>
-    </div>
-  );
-
   return (
-    <BaseModal
+    <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={headerContent}
+      title={`${t('longlat.modal.title')} (${formatLongDate(selectedDate, localeCode)})`}
+      subtitle={customerData}
       maxWidth="max-w-5xl"
       contentClassName="h-[80vh] sm:h-[70vh]"
       bodyClassName="p-0 flex flex-col overflow-hidden h-full"
@@ -61,18 +49,18 @@ export default function CustomerHistoryModal({
       <div className="w-full h-full bg-slate-50 dark:bg-slate-900 relative shrink-0">
         {mapData.length > 0 ? (
           <div className="absolute inset-0 p-4">
-            <MapLocation data={mapData} t={t} localeCode={localeCode} />
+            <MapLocation data={mapData} t={t} isIndonesian={isIndonesian} />
             <div
               className="absolute bottom-6 left-6 bg-white/90 dark:bg-slate-800/90 backdrop-blur px-3 py-2 rounded shadow text-[10px] border border-gray-200 dark:border-slate-700 dark:text-slate-200"
               style={{ zIndex: 1000 }}
             >
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                <span>{t('longlat.modal.new_loc')}</span>
+                <span>{t('common.coord_new')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-red-500 opacity-60"></span>
-                <span>{t('longlat.modal.old_loc')}</span>
+                <span>{t('common.coord_old')}</span>
               </div>
             </div>
           </div>
@@ -82,6 +70,6 @@ export default function CustomerHistoryModal({
           </div>
         )}
       </div>
-    </BaseModal>
+    </Modal>
   );
 }

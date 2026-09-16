@@ -3,11 +3,11 @@ import {
   getHubs,
   getLocationHistories,
   getResultHistories,
-  getResultsSummary,
+  getResults,
   getTasks,
   getVehicleMappings,
   getVehicleTypes,
-} from '@/lib/api';
+} from '@/lib/api/mileapp';
 import { calculateMasterTruckStorage, getDriverData } from '@/lib/driverData';
 import { getLocalStorage } from '@/lib/localStorageHandler';
 import { generateSummaryDataPreview } from '@/lib/reportGenerators/summary/summaryReport';
@@ -84,24 +84,6 @@ export default function useSummaryData() {
     };
   }, [isLoading]);
 
-  const wait = (ms) => new Promise((res) => setTimeout(res, ms));
-
-  const fetchWithRetry = useCallback(async (fn, { retries = 3, baseMs = 500 } = {}) => {
-    let attempt = 0;
-    while (true) {
-      try {
-        return await fn();
-      } catch (err) {
-        attempt++;
-        const status = err?.response?.status || err?.status || null;
-        if (attempt > retries || (status && status >= 400 && status < 500 && status !== 429)) {
-          throw err.message;
-        }
-        await wait(baseMs * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 100));
-      }
-    }
-  }, []);
-
   const fetchWithTracker = useCallback(async (promiseOrFn, label) => {
     setPendingEndpoints((prev) => [...prev, label]);
     try {
@@ -115,14 +97,6 @@ export default function useSummaryData() {
     async (allTasks, allResults, fetchedDrivers, hasPendingGR) => {
       setIsCalculatingMetrics(true);
       setHistoryProgress(0);
-
-      const getRoutingDateWIB = (dateStr) => {
-        if (!dateStr) return null;
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return null;
-        const wib = new Date(d.getTime() + 7 * 60 * 60 * 1000);
-        return `${wib.getUTCFullYear()}-${String(wib.getUTCMonth() + 1).padStart(2, '0')}-${String(wib.getUTCDate()).padStart(2, '0')}`;
-      };
 
       const taskToRoutingDate = new Map();
       (allResults || []).forEach((res) => {
@@ -212,11 +186,11 @@ export default function useSummaryData() {
         const visitId = tripRaw?.visitId || '';
 
         if (!visitId || !visitId.includes('-')) {
-          const rawName = tripRaw?.visitName || '';
+          const rawName = tripRaw?.visitName || tripRaw?.name || '';
           const parsed = parseCustomerString(rawName);
           return {
             customerOrder: rawName,
-            customerName: parsed.name || 'Tidak Diketahui',
+            customerName: parsed.name || t('common.no_data'),
             flow: 'DELIVERY',
           };
         }
@@ -230,11 +204,11 @@ export default function useSummaryData() {
         );
 
         if (!f) {
-          const rawName = tripRaw?.visitName || '';
+          const rawName = tripRaw?.visitName || tripRaw?.name || '';
           const parsed = parseCustomerString(rawName);
           return {
             customerOrder: rawName,
-            customerName: parsed.name || 'Tidak Diketahui',
+            customerName: parsed.name || t('common.no_data'),
             flow: 'DELIVERY',
           };
         }
@@ -360,54 +334,49 @@ export default function useSummaryData() {
       try {
         if (resultIdsToFetch.length > 0) {
           const batchData = await fetchWithTracker(
-            () => fetchWithRetry(() => getResultHistories(resultIdsToFetch)),
+            () => getResultHistories(resultIdsToFetch),
             'Batch Histories'
           );
 
           (batchData || []).forEach((item) => {
             const originalRes = resultMap.get(item.resultId);
-            if (!originalRes) return;
+            if (!originalRes || !item.history || !item.history[0]) return;
             const dateKey = getDeliveryDateFromRouting(originalRes.createdTime);
             if (!dateKey) return;
 
+            const { manual } = item.history[0];
             let histDry = 0;
             let histFrozen = 0;
             let histMaDry = 0;
             let histMaFrozen = 0;
 
-            (item.history || []).forEach((h) => {
-              const isVehicleFromDropped = h.vehicleFrom?.toLowerCase() === 'dropped';
-              const isActionMove = h.action?.toLowerCase() === 'move';
+            (manual?.data || []).forEach((h) => {
+              const vToClean = cleanPlat(h.vehicleTo);
+              const foundDriver = fetchedDrivers.find(
+                (d) => cleanPlat(d.plat) && vToClean.includes(cleanPlat(d.plat))
+              );
+              const storage = foundDriver ? (foundDriver.storage || '').toUpperCase() : 'DRY';
+              const isFrozen = storage.includes('FROZEN');
 
-              if (isVehicleFromDropped) {
-                const vToClean = cleanPlat(h.vehicleTo);
-                const foundDriver = fetchedDrivers.find(
-                  (d) => cleanPlat(d.plat) && vToClean.includes(cleanPlat(d.plat))
-                );
-                const storage = foundDriver ? (foundDriver.storage || '').toUpperCase() : 'DRY';
-                const isFrozen = storage.includes('FROZEN');
+              (h.visits || []).forEach((v) => {
+                const taskDetail = getTaskDetails(v);
 
-                (h.visits || []).forEach((v) => {
-                  const taskDetail = getTaskDetails(v);
-
-                  if (isFrozen) {
-                    histFrozen += 1;
-                    if (tempMetrics[dateKey]) tempMetrics[dateKey].frozen.dt_tasks.push(taskDetail);
-                    if (isActionMove) {
-                      histMaFrozen += 1;
-                      if (tempMetrics[dateKey])
-                        tempMetrics[dateKey].frozen.ma_tasks.push(taskDetail);
-                    }
-                  } else {
-                    histDry += 1;
-                    if (tempMetrics[dateKey]) tempMetrics[dateKey].dry.dt_tasks.push(taskDetail);
-                    if (isActionMove) {
-                      histMaDry += 1;
-                      if (tempMetrics[dateKey]) tempMetrics[dateKey].dry.ma_tasks.push(taskDetail);
-                    }
+                if (isFrozen) {
+                  histFrozen += 1;
+                  histMaFrozen += 1;
+                  if (tempMetrics[dateKey]) {
+                    tempMetrics[dateKey].frozen.dt_tasks.push(taskDetail);
+                    tempMetrics[dateKey].frozen.ma_tasks.push(taskDetail);
                   }
-                });
-              }
+                } else {
+                  histDry += 1;
+                  histMaDry += 1;
+                  if (tempMetrics[dateKey]) {
+                    tempMetrics[dateKey].dry.dt_tasks.push(taskDetail);
+                    tempMetrics[dateKey].dry.ma_tasks.push(taskDetail);
+                  }
+                }
+              });
             });
 
             if (tempMetrics[dateKey]) {
@@ -418,8 +387,8 @@ export default function useSummaryData() {
             }
           });
         }
-      } catch (err) {
-        toastError(t('common.toast.error', { err: err.message }));
+      } catch (e) {
+        toastError(t('common.toast.error', { err: e.message }), e);
       }
 
       const routingDateVehicles = {};
@@ -428,7 +397,6 @@ export default function useSummaryData() {
         if (!dateKey) return;
         if (!routingDateVehicles[dateKey]) routingDateVehicles[dateKey] = new Map();
 
-        // Kumpulkan multi-routing name di Set
         if (tempMetrics[dateKey] && res.name) {
           tempMetrics[dateKey].routingNames.add(res.name);
         }
@@ -545,17 +513,13 @@ export default function useSummaryData() {
         });
       });
 
-      // Algoritma Lookback (H-3) untuk memindahkan rute dari hari libur nasional/Minggu ke hari aktif kerja
       const dateKeysSorted = Object.keys(tempMetrics).sort();
       const LOOKBACK_LIMIT = 3;
 
       dateKeysSorted.forEach((currDateKey) => {
         const currM = tempMetrics[currDateKey];
 
-        // 1. Deteksi Hari Eksekusi Nyata (Berdasarkan Task Aktual)
         const currHasExecutedTasks = (currM.actual_tasks_count || 0) > 0;
-
-        // 2. Deteksi Hari Pembuatan Routing (Ada DP/TV/Routing Name)
         const currHasRouting =
           currM.dry.tv > 0 ||
           currM.frozen.tv > 0 ||
@@ -579,10 +543,8 @@ export default function useSummaryData() {
                 prevM.dry.dp > 0 ||
                 prevM.frozen.dp > 0;
 
-              // Jika H-x ada Routing tapi TIDAK ADA eksekusi Task (Libur Nasional)
               if (prevHasRouting && !prevHasExecutedTasks) {
                 ['dry', 'frozen'].forEach((type) => {
-                  // Pindahkan SEMUA metrik bawaan Routing (DP, DT, MA, TV) ke hari eksekusi
                   currM[type].dp = prevM[type].dp;
                   currM[type].dp_tasks = [...prevM[type].dp_tasks];
 
@@ -600,7 +562,6 @@ export default function useSummaryData() {
                   currM[type].tvu = prevM[type].tvu;
                   currM[type].tv_details = [...prevM[type].tv_details];
 
-                  // Kosongkan total metrik di hari libur agar memicu UI Full Red Row
                   prevM[type].dp = 0;
                   prevM[type].dp_tasks = [];
 
@@ -630,7 +591,6 @@ export default function useSummaryData() {
         }
       });
 
-      // Konversi Set menjadi Array setelah seluruh proses Lookback selesai agar data kosong terdeteksi dengan benar
       Object.keys(tempMetrics).forEach((dateKey) => {
         tempMetrics[dateKey].routingNames = Array.from(tempMetrics[dateKey].routingNames || []);
       });
@@ -638,7 +598,7 @@ export default function useSummaryData() {
       setTaskSummaryMetrics(tempMetrics);
       setIsCalculatingMetrics(false);
     },
-    [t, fetchWithTracker, fetchWithRetry]
+    [t, fetchWithTracker]
   );
 
   const fetchData = useCallback(async () => {
@@ -719,16 +679,12 @@ export default function useSummaryData() {
       const pTasks = fetchWithTracker(async () => {
         const rawResults = [];
         for (const range of taskRanges) {
-          const res = await fetchWithRetry(() =>
-            getTasks({
-              hubId: selectedLocation,
-              status: 'ONGOING,DONE',
-              timeBy: 'startTime',
-              limit: 10000,
-              timeFrom: range.from,
-              timeTo: range.to,
-            })
-          );
+          const res = await getTasks({
+            hubId: selectedLocation,
+            status: 'ONGOING,DONE',
+            timeFrom: range.from,
+            timeTo: range.to,
+          });
           rawResults.push(res);
         }
         return mergeResults(rawResults);
@@ -737,13 +693,12 @@ export default function useSummaryData() {
       const pRouting = fetchWithTracker(async () => {
         const rawResults = [];
         for (const range of routingRanges) {
-          const res = await fetchWithRetry(() =>
-            getResultsSummary({
-              hubId: selectedLocation,
-              routingDateObj: new Date(range.from),
-              deliveryDateObj: new Date(range.to),
-            })
-          );
+          const res = await getResults({
+            hubId: selectedLocation,
+            routingDateObj: new Date(range.from),
+            deliveryDateObj: new Date(range.to),
+          });
+
           rawResults.push(res);
         }
         return mergeResults(rawResults);
@@ -752,16 +707,10 @@ export default function useSummaryData() {
       const pHistory = fetchWithTracker(async () => {
         const rawResults = [];
         for (const range of historyRanges) {
-          const res = await fetchWithRetry(() =>
-            getLocationHistories({
-              limit: 10000,
-              startFinish: 'true',
-              fields: 'finish,startTime,lat,lon,email,trackedTime,totalDistance',
-              timeBy: 'createdTime',
-              timeFrom: range.from,
-              timeTo: range.to,
-            })
-          );
+          const res = await getLocationHistories({
+            timeFrom: range.from,
+            timeTo: range.to,
+          });
           rawResults.push(res);
         }
         return mergeResults(rawResults);
@@ -777,6 +726,7 @@ export default function useSummaryData() {
       setDriverData(driversRes || []);
 
       let hasPendingGRValue = false;
+      let hubCoordsString = null;
 
       try {
         const [vTypesObj, mapsDB, hubsDB] = await Promise.all([
@@ -816,6 +766,7 @@ export default function useSummaryData() {
         hasPendingGRValue = activeHub?.hasPendingGR || false;
 
         if (activeHub && activeHub.lat && (activeHub.lng || activeHub.lon)) {
+          hubCoordsString = `${activeHub.lat},${activeHub.lng || activeHub.lon}`;
           setActiveHubLocation({
             lat: parseFloat(activeHub.lat),
             lng: parseFloat(activeHub.lng || activeHub.lon),
@@ -825,7 +776,7 @@ export default function useSummaryData() {
           setActiveHubLocation(null);
         }
       } catch (e) {
-        toastError(t('common.toast.error', { err: e.message }));
+        toastError(t('common.toast.error', { err: e.message }), e);
         setMasterTruckData({ Dry: { Total: 0 }, Frozen: { Total: 0 } });
       }
 
@@ -844,7 +795,8 @@ export default function useSummaryData() {
         startStr,
         endStr,
         selectedLocation,
-        localeCode
+        localeCode,
+        hubCoordsString
       );
       setReportPreview(preview);
 
@@ -855,7 +807,7 @@ export default function useSummaryData() {
         hasPendingGRValue
       );
     } catch (e) {
-      toastError(e.message);
+      toastError(t('common.toast.error', { err: e.message }), e);
       setReportPreview(null);
     } finally {
       setIsLoading(false);
@@ -863,7 +815,6 @@ export default function useSummaryData() {
   }, [
     selectedLocation,
     dateRange,
-    fetchWithRetry,
     fetchWithTracker,
     processTaskSummaryMetrics,
     localeCode,

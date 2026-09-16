@@ -3,97 +3,97 @@
 import Spinner from '@/components/Spinner';
 import TabButton from '@/components/table/TabButton';
 import { useLanguage } from '@/context/LanguageContext';
-import { getDriverStatus, getHubs, getReasons, getRoles, getVehicleTypes } from '@/lib/api';
-import { getLocalStorage, getSuperadminRoleId } from '@/lib/localStorageHandler';
+import { getDriverStatus, getHubs, getReasons, getRoles, getVehicleTypes } from '@/lib/api/mileapp';
+import { useSuperadmin } from '@/lib/hooks/useSuperadmin';
+import { getLocalStorage } from '@/lib/localStorageHandler';
 import { toastError } from '@/lib/toast';
 import { formatDateUniversal } from '@/lib/utils';
 import { useCallback, useEffect, useState } from 'react';
 import GeneralTab from './tabs/GeneralTab';
+import PermissionTab from './tabs/PermissionTab';
 import SyncDataTab from './tabs/SyncDataTab';
 
 export default function SettingPage() {
-  const { t } = useLanguage();
-
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isLoadingPage, setIsLoadingPage] = useState(true);
-  const [isReadOnly, setIsReadOnly] = useState(false);
   const [activeTab, setActiveTab] = useState('general');
   const [lastUpdated, setLastUpdated] = useState({ hubs: '-', roles: '-', drivers: '-' });
   const [vehicleTypes, setVehicleTypes] = useState([]);
   const [hubs, setHubs] = useState([]);
   const [reasons, setReasons] = useState([]);
+  const [rolesList, setRolesList] = useState([]);
 
-  const fetchAllData = useCallback(
-    async (userRoleId, cachedSuperadminId) => {
-      try {
-        const [hubsDb, rolesDb, dStatus, vTypes, reasonsDb] = await Promise.all([
-          getHubs(),
-          getRoles(),
-          getDriverStatus(),
-          getVehicleTypes(),
-          getReasons(),
-        ]);
+  const { t } = useLanguage();
+  const { isSuperadmin, isChecking } = useSuperadmin();
 
-        let maxDriverDate = null;
-        dStatus.forEach((d) => {
-          if (d._max && d._max.updatedAt) {
-            const dateObj = new Date(d._max.updatedAt);
-            if (!maxDriverDate || dateObj > maxDriverDate) {
-              maxDriverDate = dateObj;
-            }
-          }
-        });
-        const latestDriverSync = maxDriverDate
-          ? formatDateUniversal(maxDriverDate, 'DD/MM/YYYY HH:mm:ss')
-          : '-';
+  const isSecretMode = typeof window !== 'undefined' && window.SECRET_MODE_ACTIVE === true;
+  const isReadOnlyGeneral = !isSuperadmin && !isSecretMode;
+  const isReadOnlySync = !isSuperadmin && !isSecretMode;
+  const buttonData = [
+    { tab: 'general', label: t('setting.tab.general.title') },
+    ...(isSuperadmin ? [{ tab: 'permission', label: 'Permission' }] : []),
+    { tab: 'sync', label: t('setting.tab.sync_data.title') },
+  ];
+  const fetchAllData = useCallback(async () => {
+    try {
+      const [hubsDb, rolesDb, dStatus, vTypes, reasonsDb] = await Promise.all([
+        getHubs(),
+        getRoles(),
+        getDriverStatus(),
+        getVehicleTypes(),
+        getReasons(),
+      ]);
 
-        setHubs(hubsDb);
-        setLastUpdated({
-          hubs:
-            hubsDb.length > 0 && hubsDb[0].updatedAt
-              ? formatDateUniversal(new Date(hubsDb[0].updatedAt), 'DD/MM/YYYY HH:mm:ss')
-              : '-',
-          roles:
-            rolesDb.length > 0 && rolesDb[0].updatedAt
-              ? formatDateUniversal(new Date(rolesDb[0].updatedAt), 'DD/MM/YYYY HH:mm:ss')
-              : '-',
-          drivers: latestDriverSync,
-        });
+      const { storedLocation } = getLocalStorage();
+      let maxDriverDate = null;
 
-        setVehicleTypes(vTypes);
-        setReasons(reasonsDb || []);
-
-        const ownerRole = rolesDb.find((r) => r.name.toLowerCase() === 'owner');
-
-        if (userRoleId === cachedSuperadminId || (ownerRole && userRoleId === ownerRole._id)) {
-          setIsReadOnly(false);
-        } else {
-          setIsReadOnly(true);
-        }
-      } catch (error) {
-        toastError(t('common.toast.error', { err: error.message }));
+      const activeHubData = dStatus.find((d) => d.hubId === storedLocation);
+      if (activeHubData && activeHubData._max && activeHubData._max.updatedAt) {
+        maxDriverDate = new Date(activeHubData._max.updatedAt);
       }
-    },
-    [t]
-  );
+
+      const latestDriverSync = maxDriverDate
+        ? formatDateUniversal(maxDriverDate, 'DD/MM/YYYY HH:mm:ss')
+        : '-';
+
+      const filteredRoles = (rolesDb || []).filter((r) => !r.name.toLowerCase().includes('driver'));
+
+      setHubs(hubsDb);
+      setRolesList(filteredRoles);
+      setLastUpdated({
+        hubs:
+          hubsDb.length > 0 && hubsDb[0].updatedAt
+            ? formatDateUniversal(new Date(hubsDb[0].updatedAt), 'DD/MM/YYYY HH:mm:ss')
+            : '-',
+        roles:
+          rolesDb.length > 0 && rolesDb[0].updatedAt
+            ? formatDateUniversal(new Date(rolesDb[0].updatedAt), 'DD/MM/YYYY HH:mm:ss')
+            : '-',
+        drivers: latestDriverSync,
+      });
+
+      setVehicleTypes(vTypes);
+      setReasons(reasonsDb || []);
+    } catch (e) {
+      toastError(t('common.toast.error', { err: e.message }), e);
+    }
+  }, [t]);
 
   useEffect(() => {
     const checkAuthAndLoadData = async () => {
       try {
         const { storedUser } = getLocalStorage();
-        if (!storedUser) {
+        const secret = window.SECRET_MODE_ACTIVE === true;
+
+        if (!storedUser && !secret) {
           toastError(t('home.toast.no_session'));
           return;
         }
 
         setIsAuthorized(true);
-
-        const user = JSON.parse(storedUser);
-        const cachedSuperadminId = getSuperadminRoleId();
-
-        await fetchAllData(user.roleId, cachedSuperadminId);
-      } catch (error) {
-        toastError(t('common.toast.error', { err: error.message }));
+        await fetchAllData();
+      } catch (e) {
+        toastError(t('common.toast.error', { err: e.message }), e);
       } finally {
         setIsLoadingPage(false);
       }
@@ -102,29 +102,19 @@ export default function SettingPage() {
     checkAuthAndLoadData();
   }, [fetchAllData, t]);
 
-  if (isLoadingPage) {
+  if (isLoadingPage || isChecking) {
     return (
       <div className="p-8 text-center text-slate-500 flex flex-col justify-center items-center h-full gap-4">
         <Spinner />
-        {t('common.loading')}
       </div>
     );
   }
 
   if (!isAuthorized) return null;
 
-  const buttonData = [
-    { tab: 'general', label: t('setting.tab.general.title') },
-    { tab: 'sync', label: t('setting.tab.sync_data.title') },
-  ];
-
   const renderTabContent = () => {
     const triggerRefresh = () => {
-      const { storedUser } = getLocalStorage();
-      if (storedUser) {
-        const user = JSON.parse(storedUser);
-        fetchAllData(user.roleId, getSuperadminRoleId());
-      }
+      fetchAllData();
     };
 
     switch (activeTab) {
@@ -135,7 +125,16 @@ export default function SettingPage() {
             hubs={hubs}
             reasons={reasons}
             onRefresh={triggerRefresh}
-            isReadOnly={isReadOnly}
+            isReadOnly={isReadOnlyGeneral}
+            translate={t}
+          />
+        );
+      case 'permission':
+        return (
+          <PermissionTab
+            roles={rolesList}
+            onRefresh={triggerRefresh}
+            isReadOnly={isReadOnlyGeneral}
             translate={t}
           />
         );
@@ -144,7 +143,7 @@ export default function SettingPage() {
           <SyncDataTab
             lastUpdated={lastUpdated}
             onRefresh={triggerRefresh}
-            isReadOnly={isReadOnly}
+            isReadOnly={isReadOnlySync}
             translate={t}
           />
         );

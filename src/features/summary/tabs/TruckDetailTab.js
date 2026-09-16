@@ -11,7 +11,7 @@ import { Fragment, useState } from 'react';
 import RoutingDropdown from './components/RoutingDropdown';
 import TruckDetailModal from './modals/TruckDetailModal';
 
-export default function TruckDetailTab({ data, translate, localeCode, isIndonesian }) {
+export default function TruckDetailTab({ data, translate, localeCode, isIndonesian, colorLegend }) {
   const { driverEmails, driverMap, dateKeys, dataMatrix } = data || {};
   const [modalData, setModalData] = useState(null);
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -46,24 +46,6 @@ export default function TruckDetailTab({ data, translate, localeCode, isIndonesi
     };
   };
 
-  const errorColor = [
-    {
-      name: 'orange',
-      colors: 'bg-orange-400 text-white dark:bg-orange-600',
-    },
-    {
-      name: 'blue',
-      colors: 'bg-[#4F76C7] text-white dark:bg-[#325296]',
-    },
-    {
-      name: 'magenta',
-      colors: 'bg-[#C85D86] text-white dark:bg-[#964263]',
-    },
-    {
-      name: 'indigo',
-      colors: 'bg-[#5C5FB2] text-white dark:bg-[#45488c]',
-    },
-  ];
   const displayData = [
     {
       key: 'weight',
@@ -155,7 +137,7 @@ export default function TruckDetailTab({ data, translate, localeCode, isIndonesi
       getStyle: (m) => {
         if (!m || m.outlets <= 0) return {};
         const hex = heatMap(percentage(m.delivered, m.outlets));
-        return hex ? { backgroundColor: `#${hex}` } : {};
+        return hex ? { backgroundColor: `#${hex}`, color: '#334155' } : {};
       },
       text: translate('summary.tabs.truck_detail.delivered'),
       hasManualTooltip: false,
@@ -252,25 +234,48 @@ export default function TruckDetailTab({ data, translate, localeCode, isIndonesi
               {dateKeys.map((d, i) => {
                 const { isHoliday } = checkHolidayStatus(d.str);
                 const metricColor = isHoliday ? holidayColor : titleColor;
+
+                const hasFallback = driverEmails.some(
+                  (email) => dataMatrix[d.str]?.[email]?.isDistFallback
+                );
+
                 return (
                   <Fragment key={`${d.day}-${i}-header`}>
                     {displayData.map(({ key, border, text }) => {
                       const isTotalDelivery = key === 'total_delivery';
-                      const totalDeliveryTooltip = isTotalDelivery
-                        ? translate('summary.tabs.truck_detail.tooltip.pct_info')
-                        : '';
-                      const totalDeliveryClass = isTotalDelivery
-                        ? 'cursor-help border-b-2 border-dotted pb-0.5'
-                        : '';
+                      const isDistance = key === 'distance';
+
+                      let tooltipText = '';
+                      let showDotted = false;
+
+                      if (!isHoliday) {
+                        if (isTotalDelivery) {
+                          tooltipText = translate('summary.tabs.truck_detail.tooltip.pct_info');
+                          showDotted = true;
+                        } else if (isDistance && hasFallback) {
+                          tooltipText =
+                            'Sebagian/seluruh jarak menggunakan data Task (Routing kosong)';
+                          showDotted = true;
+                        }
+                      }
+
                       return (
-                        <Tooltip tooltipContent={totalDeliveryTooltip} key={key}>
+                        <Tooltip tooltipContent={tooltipText} key={key}>
                           <th
                             key={key}
                             className={`${thMetricClass} ${metricColor} ${
                               border ? 'border-l-2 border-l-gray-400 dark:border-l-slate-600' : ''
                             }`}
                           >
-                            <span className={totalDeliveryClass}>{text}</span>
+                            <span
+                              className={
+                                showDotted
+                                  ? 'cursor-help border-b-2 border-dotted border-gray-400 dark:border-slate-500 pb-0.5'
+                                  : ''
+                              }
+                            >
+                              {text}
+                            </span>
                           </th>
                         </Tooltip>
                       );
@@ -329,12 +334,12 @@ export default function TruckDetailTab({ data, translate, localeCode, isIndonesi
                     let cellBg = isHoliday ? holidayColor : '';
                     const emptyBg = isHoliday ? holidayColor : 'bg-gray-50 dark:bg-slate-800';
                     if (metrics && outletData > 0) {
-                      if (metrics.hasManualError && metrics.hasBedaHariError)
-                        cellBg = errorColor.find((item) => item.name === 'indigo')?.colors;
+                      if (metrics.hasManualError && metrics.hasDateDiffError)
+                        cellBg = colorLegend.find((item) => item.name === 'indigo')?.colors;
                       else if (metrics.hasManualError)
-                        cellBg = errorColor.find((item) => item.name === 'blue')?.colors;
-                      else if (metrics.hasBedaHariError)
-                        cellBg = errorColor.find((item) => item.name === 'magenta')?.colors;
+                        cellBg = colorLegend.find((item) => item.name === 'blue')?.colors;
+                      else if (metrics.hasDateDiffError)
+                        cellBg = colorLegend.find((item) => item.name === 'magenta')?.colors;
                     }
 
                     if (shouldMergeHoliday) {
@@ -478,32 +483,6 @@ export default function TruckDetailTab({ data, translate, localeCode, isIndonesi
             })}
           </tbody>
         </table>
-      </div>
-
-      <div className="px-4 py-3 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 shadow-sm shrink-0">
-        <div>
-          <div className="flex flex-col justify-between gap-2 pb-1">
-            <div className="text-xs text-slate-500 dark:text-slate-400 italic">
-              *
-              {translate('common.click_for_detail_param', {
-                parameter: translate('summary.tabs.truck_detail.row'),
-              })}
-            </div>
-            <h4 className="text-xs font-bold mb-2 text-slate-700 dark:text-slate-200">
-              {translate('summary.tabs.truck_detail.color_exp')}
-            </h4>
-          </div>
-          <div className="flex flex-col lg:flex-row lg:justify-start gap-x-6 gap-y-2 text-xs text-slate-600 dark:text-slate-300">
-            {errorColor.map((color, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <span
-                  className={`w-4 h-4 border border-gray-400 dark:border-slate-600 rounded-sm ${color.colors}`}
-                />
-                <span>{translate(`summary.tabs.truck_detail.${color.name}`)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -1,31 +1,36 @@
 'use client';
 
-import Button from '@/components/Button';
-import BodyCard from '@/components/card/BodyCard';
-import HeaderCard from '@/components/card/HeaderCard';
+import Button from '@/components/button/Button';
+import StorageTypeFilter from '@/components/dropdown/StorageTypeFilter';
+import VehicleTypeFilter from '@/components/dropdown/VehicleTypeFilter';
+import PageTemplate from '@/components/page/PageTemplate';
 import SearchBar from '@/components/SearchBar';
-import StorageTypeFilter from '@/components/StorageTypeFilter';
 import { useLanguage } from '@/context/LanguageContext';
+import { getOdometer } from '@/lib/api/mceasy/odometer';
 import { getDriverData } from '@/lib/driverData';
 import { getLocalStorage } from '@/lib/localStorageHandler';
-import { isEmpty } from '@/lib/utils';
+import { formatDateUniversal, getBaseVehicleType, isEmpty } from '@/lib/utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getVehicleMappings } from '../../lib/api';
 import { toastError } from '../../lib/toast';
 import TemplateTab from './components/TemplateTab';
 import VehicleTab from './components/VehicleTab';
 import { handleConfirmDownload } from './help';
 
 const countSpaces = (str) => (str ? (str.match(/ /g) || []).length : 0);
-const sortByEmail = (a, b) => (a.email || '').localeCompare(b.email || '');
+const sortData = (a, b) => {
+  const typeCmp = (a.type || '').localeCompare(b.type || '');
+  if (typeCmp !== 0) return typeCmp;
+  return (a.email || '').localeCompare(b.email || '');
+};
 
-const processVehicleData = (rawDriversData, mappingsDB) => {
-  const mappingsObj = mappingsDB.reduce((acc, curr) => {
-    acc[curr.plat] = curr.mappedType;
-    return acc;
-  }, {});
-
+const processVehicleData = (rawDriversData, odometer) => {
   const processedData = rawDriversData.map((v) => {
+    let odoValue = '-';
+    if (v.vmsVehicleId && Array.isArray(odometer)) {
+      const match = odometer.find((o) => String(o.vehicleId) === String(v.vmsVehicleId));
+      if (match) odoValue = match.odometer;
+    }
+
     let parsedTags = [];
     if (v.tags) {
       try {
@@ -37,18 +42,12 @@ const processVehicleData = (rawDriversData, mappingsDB) => {
       parsedTags = [v.type];
     }
 
-    let mappedTypeStr = v.type;
-    if (v.plat && mappingsObj[v.plat]) {
-      const mappedType = mappingsObj[v.plat];
-      mappedTypeStr = v.storage ? `${v.storage}-${mappedType}` : mappedType;
-    }
-
-    const isIncomplete = !v.email || !mappedTypeStr;
+    const isIncomplete = !v.email || !v.type;
 
     return {
       ...v,
+      odometer: odoValue,
       parsedTags,
-      type: mappedTypeStr,
       isIncomplete,
     };
   });
@@ -65,17 +64,6 @@ const processVehicleData = (rawDriversData, mappingsDB) => {
       emailToVehiclesMap.get(emailKey).push(v);
     }
   });
-
-  const templateData = processedData
-    .map((item) => {
-      const emailKey = (item.email || '').toLowerCase();
-      const vehicles = emailToVehiclesMap.get(emailKey) || [];
-      return {
-        ...item,
-        isDuplicateDriver: vehicles.length > 1,
-      };
-    })
-    .sort(sortByEmail);
 
   const masterList = [];
   const conditionalList = [];
@@ -105,15 +93,32 @@ const processVehicleData = (rawDriversData, mappingsDB) => {
     }
   }
 
+  const masterSorted = masterList.sort(sortData);
+  const conditionalSorted = conditionalList.sort(sortData);
+  const templateData = [...masterSorted, ...conditionalSorted];
+
   return {
     templateData,
-    masterData: masterList.sort(sortByEmail),
-    conditionalData: conditionalList.sort(sortByEmail),
+    masterData: masterSorted,
+    conditionalData: conditionalSorted,
   };
 };
 
+const colorLegend = [
+  {
+    name: 'duplicate_driver',
+    colors: 'text-white bg-yellow-100 dark:bg-yellow-400/30',
+    text: 'vehicle.tabs.duplicate_driver',
+  },
+  {
+    name: 'incomplete_data',
+    colors: 'text-white bg-red-100 dark:bg-red-400/30',
+    text: 'vehicle.tabs.incomplete_data',
+  },
+];
+
 export default function VehicleData() {
-  const { t } = useLanguage();
+  const { t, localeCode } = useLanguage();
   const [activeTab, setActiveTab] = useState('master');
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -122,6 +127,8 @@ export default function VehicleData() {
   const [masterData, setMasterData] = useState([]);
   const [conditionalData, setConditionalData] = useState([]);
   const [templateData, setTemplateData] = useState([]);
+  const [typeFilter, setTypeFilter] = useState('');
+  const [masterVehicleTypes, setMasterVehicleTypes] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -130,32 +137,26 @@ export default function VehicleData() {
       setIsLoading(true);
       try {
         const { storedLocation } = getLocalStorage();
-        if (!storedLocation) {
-          throw new Error(t('common.toast.error', { err: 'Location not found' }));
-        }
-
-        const [rawDriversData, mappingsDB] = await Promise.all([
-          getDriverData(storedLocation),
-          getVehicleMappings(),
-        ]);
+        const rawDriversData = await getDriverData(storedLocation);
 
         if (!rawDriversData || isEmpty(rawDriversData)) {
           throw new Error(t('common.toast.error', { err: t('common.no_driver') }));
         }
+        const odometer = await getOdometer({ date: formatDateUniversal(new Date()) });
 
         const {
           templateData: temp,
           masterData: master,
           conditionalData: cond,
-        } = processVehicleData(rawDriversData, mappingsDB);
+        } = processVehicleData(rawDriversData, odometer);
 
         if (!isMounted) return;
 
         setTemplateData(temp);
         setMasterData(master);
         setConditionalData(cond);
-      } catch (err) {
-        if (isMounted) toastError(err.message);
+      } catch (e) {
+        if (isMounted) toastError(t('common.toast.error', { err: e.message }), e);
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -179,6 +180,16 @@ export default function VehicleData() {
     [storageFilter]
   );
 
+  const applyTypeFilter = useCallback(
+    (list) => {
+      if (!typeFilter || typeFilter === 'all') return list;
+      return list.filter(
+        (item) => getBaseVehicleType(item.type, masterVehicleTypes) === typeFilter
+      );
+    },
+    [typeFilter, masterVehicleTypes]
+  );
+
   const filteredData = useMemo(() => {
     let data = [];
     if (activeTab === 'master') data = masterData;
@@ -186,6 +197,7 @@ export default function VehicleData() {
     else if (activeTab === 'template') data = templateData;
 
     data = applyStorageFilter(data);
+    data = applyTypeFilter(data);
 
     if (!searchQuery) return data;
 
@@ -194,21 +206,23 @@ export default function VehicleData() {
       const plat = (v.plat || '').toLowerCase();
       const name = (v.name || '').toLowerCase();
       const email = (v.email || '').toLowerCase();
-      const type = (v.type || '').toLowerCase();
 
-      return (
-        plat.includes(lowerQuery) ||
-        name.includes(lowerQuery) ||
-        email.includes(lowerQuery) ||
-        type.includes(lowerQuery)
-      );
+      return plat.includes(lowerQuery) || name.includes(lowerQuery) || email.includes(lowerQuery);
     });
-  }, [activeTab, masterData, conditionalData, templateData, searchQuery, applyStorageFilter]);
+  }, [
+    activeTab,
+    masterData,
+    conditionalData,
+    templateData,
+    searchQuery,
+    applyStorageFilter,
+    applyTypeFilter,
+  ]);
 
   const handleExcelDownload = () => {
-    const filteredMaster = applyStorageFilter(masterData);
-    const filteredConditional = applyStorageFilter(conditionalData);
-    const filteredTemplate = applyStorageFilter(templateData);
+    const filteredMaster = applyTypeFilter(applyStorageFilter(masterData));
+    const filteredConditional = applyTypeFilter(applyStorageFilter(conditionalData));
+    const filteredTemplate = applyTypeFilter(applyStorageFilter(templateData));
 
     let filePrefix = '';
     if (storageFilter.includes('DRY') && !storageFilter.includes('FROZEN')) filePrefix = 'DRY';
@@ -224,16 +238,18 @@ export default function VehicleData() {
       fileNamePrefix: filePrefix,
     });
   };
+  const searchPlaceholder = `${t('common.license_number')}, ${t('common.driver')}`;
 
   const headerItems = [
     {
-      label: 'Filter',
+      label: t('common.search'),
       component: (
         <SearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder={t('vehicle.search_placeholder')}
           disabled={isLoading}
+          onChange={setSearchQuery}
+          placeholder={t('common.search')}
+          tooltip={searchPlaceholder}
+          value={searchQuery}
         />
       ),
     },
@@ -242,9 +258,22 @@ export default function VehicleData() {
       hideLabel: false,
       component: (
         <StorageTypeFilter
-          selectedTypes={storageFilter}
-          onApply={setStorageFilter}
           disabled={isLoading || isDownloading}
+          onApply={setStorageFilter}
+          selectedTypes={storageFilter}
+        />
+      ),
+    },
+    {
+      label: t('common.vehicle_type'),
+      hideLabel: false,
+      component: (
+        <VehicleTypeFilter
+          data={templateData}
+          disabled={isLoading || isDownloading}
+          onApply={setTypeFilter}
+          onMasterTypesLoad={setMasterVehicleTypes}
+          selectedType={typeFilter}
         />
       ),
     },
@@ -275,35 +304,41 @@ export default function VehicleData() {
       : []),
     { id: 'template', label: t('vehicle.tabs.template_title') },
   ];
-
+  const footerData = {
+    title: t('common.color_exp'),
+    data: colorLegend,
+    isColorLegend: true,
+  };
   return (
-    <div className="w-full max-w-none px-4 sm:px-6">
-      <HeaderCard
-        title={t('vehicle.title')}
-        subtitle={
-          <>
-            {t('vehicle.subtitle')}{' '}
-            <span className="font-semibold text-sky-600">{t('vehicle.subtitle_highlight')}</span>
-          </>
-        }
-        items={headerItems}
-      />
-      <BodyCard
-        activeTabId={activeTab}
-        isEmpty={!isLoading && totalItems === 0}
-        isLoading={isLoading}
-        onTabClick={setActiveTab}
-        tabs={tabs}
-      >
-        <div className="flex-1 flex flex-col m-0 rounded-b-xl overflow-auto">
-          {(activeTab === 'master' || activeTab === 'conditional') && (
-            <VehicleTab paginatedData={filteredData} searchQuery={searchQuery} t={t} />
-          )}
-          {activeTab === 'template' && (
-            <TemplateTab paginatedData={filteredData} searchQuery={searchQuery} t={t} />
-          )}
-        </div>
-      </BodyCard>
-    </div>
+    <PageTemplate
+      title={t('vehicle.title')}
+      subtitle={
+        <>
+          {t('vehicle.subtitle')}{' '}
+          <span className="font-semibold text-sky-600">{t('vehicle.subtitle_highlight')}</span>
+        </>
+      }
+      headerItems={headerItems}
+      activeTabId={activeTab}
+      onTabClick={setActiveTab}
+      tabs={tabs}
+      isLoading={isLoading}
+      isEmpty={!isLoading && totalItems === 0}
+      footer={footerData}
+    >
+      <div className="flex-1 flex flex-col m-0 overflow-auto">
+        {(activeTab === 'master' || activeTab === 'conditional') && (
+          <VehicleTab
+            localeCode={localeCode}
+            paginatedData={filteredData}
+            searchQuery={searchQuery}
+            t={t}
+          />
+        )}
+        {activeTab === 'template' && (
+          <TemplateTab paginatedData={filteredData} searchQuery={searchQuery} t={t} />
+        )}
+      </div>
+    </PageTemplate>
   );
 }

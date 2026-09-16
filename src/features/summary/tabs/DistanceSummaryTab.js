@@ -4,39 +4,33 @@ import Tooltip from '@/components/Tooltip';
 import { formatLongDate } from '@/lib/utils';
 import { useState } from 'react';
 import RoutingDropdown from './components/RoutingDropdown';
-import AverageDistanceModal from './modals/DistanceSummaryModal';
+import DistanceSummaryModal from './modals/DistanceSummaryModal';
 
 export default function DistanceSummaryTab({ data, monthTotals, translate, localeCode }) {
   const defaultClass =
     'border border-gray-300 dark:border-slate-600 px-4 py-3 text-center text-slate-700 dark:text-slate-200 whitespace-nowrap';
-  const defaultVioletClass = `${defaultClass} bg-violet-300 dark:bg-violet-900/30`;
-  const greenHeaderClass = `${defaultClass} bg-green-200 dark:bg-green-900/40 font-bold`;
-  const orangeHeaderClass = `${defaultClass} bg-orange-200 dark:bg-orange-900/40 font-bold`;
+  const defaultVioletClass = `${defaultClass} bg-violet-300 dark:bg-slate-800 dark:bg-gradient-to-t dark:from-violet-900/30 dark:to-violet-900/30`;
+  const greenHeaderClass = `${defaultClass} bg-green-200 dark:bg-slate-800 dark:bg-gradient-to-t dark:from-green-900/40 dark:to-green-900/40 font-bold`;
+  const orangeHeaderClass = `${defaultClass} bg-orange-200 dark:bg-slate-800 dark:bg-gradient-to-t dark:from-orange-900/40 dark:to-orange-900/40 font-bold`;
   const wrapVioletClass =
-    'border border-gray-300 dark:border-slate-600 px-4 py-3 text-center text-slate-700 dark:text-slate-200 whitespace-normal break-words max-w-[120px] bg-violet-300 dark:bg-violet-900/30 font-bold';
+    'border border-gray-300 dark:border-slate-600 px-4 py-3 text-center text-slate-700 dark:text-slate-200 whitespace-normal break-words max-w-[120px] bg-violet-300 dark:bg-slate-800 dark:bg-gradient-to-t dark:from-violet-900/30 dark:to-violet-900/30 font-bold';
   const separatorClass = 'border-r-4 border-r-gray-400 dark:border-r-slate-500';
   const bodyCellClass =
     'border border-gray-300 dark:border-slate-700 px-4 py-2 text-center whitespace-nowrap';
   const [modalOpen, setModalOpen] = useState(false);
   const [modalData, setModalData] = useState([]);
-  const [modalTitle, setModalTitle] = useState('');
+  const [modalHeader, setModalHeader] = useState({ title: '', subtitle: '' });
   const [openDropdown, setOpenDropdown] = useState(null);
 
   const handleCellClick = (details, dateStr, type) => {
-    const validDetails = (details || []).filter((d) => d.visit > 0);
+    const validDetails = details || [];
 
     if (validDetails.length > 0) {
       setModalData(validDetails);
-      setModalTitle(
-        <div>
-          <h3 className="text-lg font-bold">
-            {translate('summary.tabs.dist_summary.modal.title')} - {type}
-          </h3>
-          <p className="text-slate-300 text-sm font-normal">
-            {formatLongDate(dateStr, localeCode)}
-          </p>
-        </div>
-      );
+      setModalHeader({
+        title: `${translate('summary.tabs.dist_summary.modal.title')} - ${type}`,
+        subtitle: formatLongDate(dateStr, localeCode),
+      });
       setModalOpen(true);
     }
   };
@@ -58,11 +52,11 @@ export default function DistanceSummaryTab({ data, monthTotals, translate, local
     const hasTypeDist = typeDist > 0;
     const isDry = title === 'Dry';
     const normalColorClass = isDry
-      ? 'bg-red-100 dark:bg-red-900/30'
-      : 'bg-blue-100 dark:bg-blue-900/30';
+      ? 'bg-red-100 dark:bg-slate-800 dark:bg-gradient-to-t dark:from-red-900/30 dark:to-red-900/30'
+      : 'bg-blue-100 dark:bg-slate-800 dark:bg-gradient-to-t dark:from-blue-900/30 dark:to-blue-900/30';
     const hoverColorClass = isDry
-      ? `hover:bg-red-200 dark:hover:bg-red-900/50`
-      : `hover:bg-blue-200 dark:hover:bg-blue-900/50`;
+      ? `hover:bg-red-200 dark:hover:from-red-900/50 dark:hover:to-red-900/50`
+      : `hover:bg-blue-200 dark:hover:from-blue-900/50 dark:hover:to-blue-900/50`;
 
     return (
       <td
@@ -103,6 +97,20 @@ export default function DistanceSummaryTab({ data, monthTotals, translate, local
           onToggle={() => setOpenDropdown(openDropdown === dateVal ? null : dateVal)}
         />
       );
+    } else if (
+      (!row.routingNames || row.routingNames.length === 0) &&
+      (row.dryCount > 0 || row.frozenCount > 0) &&
+      !row.isSunday
+    ) {
+      return (
+        <Tooltip
+          tooltipContent={`${translate('common.no_data')} ${translate('common.routing').toLowerCase()}`}
+        >
+          <span className="cursor-help border-b-2 border-dotted border-slate-700 dark:border-slate-400 pb-0.5">
+            {formatLongDate(row.dateStr || row.date, localeCode)}
+          </span>
+        </Tooltip>
+      );
     } else {
       return <span>{formatLongDate(row.dateStr || row.date, localeCode)}</span>;
     }
@@ -110,11 +118,12 @@ export default function DistanceSummaryTab({ data, monthTotals, translate, local
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden relative">
-      <AverageDistanceModal
+      <DistanceSummaryModal
         isOpen={modalOpen}
         onClose={closeModal}
         data={modalData}
-        title={modalTitle}
+        title={modalHeader.title}
+        subtitle={modalHeader.subtitle}
         translate={translate}
         localeCode={localeCode}
       />
@@ -277,15 +286,6 @@ export default function DistanceSummaryTab({ data, monthTotals, translate, local
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
-
-      <div className="mt-0.5 px-4 py-3 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 rounded-b-lg shadow-sm shrink-0 z-10 relative">
-        <div className="text-xs text-slate-500 dark:text-slate-400 italic">
-          *
-          {translate('common.click_for_detail_param', {
-            parameter: translate('summary.underline'),
-          })}
         </div>
       </div>
     </div>

@@ -1,39 +1,57 @@
 ├── app
 │   ├── api
-│   │   ├── get-batch-histories
-│   │   │   └── route.js
-│   │   ├── get-drivers
+│   │   ├── mceasy
+│   │   │   ├── odometer
+│   │   │   │   └── route.js
 │   │   │   ├── route.js
-│   │   │   └── status
-│   │   │       └── route.js
-│   │   ├── get-hubs
-│   │   │   └── route.js
-│   │   ├── get-location-histories
-│   │   │   └── route.js
-│   │   ├── get-result
-│   │   │   └── route.js
-│   │   ├── get-results-summary
-│   │   │   └── route.js
-│   │   ├── get-roles
-│   │   │   └── route.js
-│   │   ├── get-tasks
-│   │   │   └── route.js
-│   │   ├── get-trash
-│   │   │   └── route.js
-│   │   ├── get-users
-│   │   │   └── route.js
-│   │   ├── get-vehicles
-│   │   │   └── route.js
-│   │   ├── pending-details
-│   │   │   └── route.js
-│   │   ├── reasons
-│   │   │   └── route.js
-│   │   ├── truck-usage
-│   │   │   └── route.js
-│   │   ├── vehicle-mappings
-│   │   │   └── route.js
-│   │   └── vehicle-types
-│   │       └── route.js
+│   │   │   ├── tracking
+│   │   │   │   └── route.js
+│   │   │   ├── users
+│   │   │   │   └── route.js
+│   │   │   └── vehicles
+│   │   │       ├── statuses
+│   │   │       │   └── route.js
+│   │   │       └── [id]
+│   │   │           └── route.js
+│   │   └── mileapp
+│   │       ├── drivers
+│   │       │   ├── route.js
+│   │       │   └── status
+│   │       │       └── route.js
+│   │       ├── hubs
+│   │       │   └── route.js
+│   │       ├── location-histories
+│   │       │   └── route.js
+│   │       ├── pending-details
+│   │       │   └── route.js
+│   │       ├── reasons
+│   │       │   └── route.js
+│   │       ├── results
+│   │       │   ├── histories
+│   │       │   │   └── route.js
+│   │       │   ├── route.js
+│   │       │   └── [id]
+│   │       │       └── route.js
+│   │       ├── roles
+│   │       │   └── route.js
+│   │       ├── task
+│   │       │   └── route.js
+│   │       ├── tasks
+│   │       │   ├── route.js
+│   │       │   └── [id]
+│   │       │       └── route.js
+│   │       ├── trash
+│   │       │   └── route.js
+│   │       ├── truck-usage
+│   │       │   └── route.js
+│   │       ├── users
+│   │       │   └── route.js
+│   │       ├── vehicle-mappings
+│   │       │   └── route.js
+│   │       ├── vehicle-types
+│   │       │   └── route.js
+│   │       └── vehicles
+│   │           └── route.js
 │   ├── coordinate
 │   │   └── page.js
 │   ├── delivery
@@ -51,9 +69,9 @@
 │   │   │   └── page.js
 │   │   ├── counter
 │   │   │   └── page.js
-│   │   ├── daily
+│   │   ├── custom
 │   │   │   └── page.js
-│   │   ├── detail
+│   │   ├── daily
 │   │   │   └── page.js
 │   │   └── kpi
 │   │       └── page.js
@@ -61,49 +79,70 @@
 │   │   └── page.js
 │   ├── summary
 │   │   └── page.js
+│   ├── task
+│   │   └── page.js
+│   ├── tracking
+│   │   └── page.js
 │   └── vehicles
 │       └── page.js
 ├── components
 │   ├── Accordion.js
-│   ├── AppLayout.js
-│   ├── BaseModal.js
-│   ├── Button.js
+│   ├── button
+│   │   ├── Button.js
+│   │   ├── CopyButton.js
+│   │   ├── InformationButton.js
+│   │   ├── LanguageToggle.js
+│   │   ├── RadioButton.js
+│   │   ├── RouteInfoButton.js
+│   │   ├── ThemeToggle.js
+│   │   └── ToggleButton.js
 │   ├── card
 │   │   ├── BodyCard.js
 │   │   └── HeaderCard.js
 │   ├── Carousel.js
 │   ├── CustomDatePicker.js
-│   ├── ErrorPage.js
+│   ├── dropdown
+│   │   ├── Dropdown.js
+│   │   ├── LocationDropdown.js
+│   │   ├── StorageTypeFilter.js
+│   │   └── VehicleTypeFilter.js
 │   ├── fileUploader
 │   │   ├── FileUploader.js
 │   │   ├── helper
 │   │   │   ├── tutorialData.js
 │   │   │   └── validator.js
 │   │   └── UploadArea.js
-│   ├── Footer.js
 │   ├── HighlightText.js
-│   ├── LanguageToggle.js
-│   ├── LocationDropdown.js
+│   ├── JsonTree.js
+│   ├── Map.js
 │   ├── modal
 │   │   ├── ConfirmModal.js
+│   │   ├── ManualUploadModal.js
+│   │   ├── Modal.js
 │   │   ├── SystemUpdateModal.js
+│   │   ├── TaskModal.js
 │   │   ├── TokenExpirationModal.js
 │   │   └── VehicleTagMappingModal.js
 │   ├── navbar
-│   │   ├── LocationSwitcher.js
+│   │   ├── MobileMenu.js
 │   │   ├── Navbar.js
+│   │   ├── NavDropdown.js
 │   │   └── UserDropdown.js
-│   ├── RoutingInfo.js
+│   ├── page
+│   │   ├── AppLayout.js
+│   │   ├── ErrorPage.js
+│   │   ├── Footer.js
+│   │   ├── PageTemplate.js
+│   │   ├── ReportTemplate.js
+│   │   ├── SelectionLayout.js
+│   │   └── SessionGuard.js
 │   ├── SearchBar.js
-│   ├── SelectionLayout.js
-│   ├── SessionGuard.js
 │   ├── Spinner.js
-│   ├── StorageTypeFilter.js
 │   ├── table
 │   │   ├── TabButton.js
+│   │   ├── TableData.js
 │   │   ├── Td.js
 │   │   └── Th.js
-│   ├── ThemeToggle.js
 │   └── Tooltip.js
 ├── context
 │   ├── LanguageContext.js
@@ -130,10 +169,18 @@
 │   │       └── RoutingVsActualTab.js
 │   ├── delivery
 │   │   ├── components
-│   │   │   ├── DeliveryForm.js
-│   │   │   └── TableData.js
+│   │   │   ├── CustomTable.js
+│   │   │   └── DeliveryForm.js
 │   │   ├── DeliveryPage.js
-│   │   └── help.js
+│   │   ├── helper
+│   │   │   ├── deliveryForm.js
+│   │   │   ├── deliveryList.js
+│   │   │   ├── index.js
+│   │   │   ├── routeTransaction.js
+│   │   │   └── shared.js
+│   │   └── modal
+│   │       ├── BunListModal.js
+│   │       └── PartialRoutingModal.js
 │   ├── help
 │   │   ├── components
 │   │   │   ├── ContentBlockRenderer.js
@@ -156,26 +203,32 @@
 │   │   └── HelpPage.js
 │   ├── reports
 │   │   ├── BreadReport.js
+│   │   ├── CustomReport.js
 │   │   ├── DailyReport.js
 │   │   ├── helper
+│   │   │   ├── breadHelper.js
 │   │   │   ├── constants.js
-│   │   │   └── help.js
+│   │   │   ├── customHelper.js
+│   │   │   ├── dailyHelper.js
+│   │   │   ├── help.js
+│   │   │   └── kpiHelper.js
 │   │   ├── KpiReport.js
-│   │   ├── TaskCountReport.js
-│   │   └── TaskDetailReport.js
+│   │   └── TaskCountReport.js
 │   ├── setting
 │   │   ├── components
 │   │   │   ├── BranchManager.js
 │   │   │   ├── Card.js
+│   │   │   ├── CustomTable.js
 │   │   │   ├── ReasonManager.js
-│   │   │   ├── StandardType.js
-│   │   │   ├── Table.js
+│   │   │   ├── StandardTypeManager.js
+│   │   │   ├── SyncModal.js
 │   │   │   └── VehicleMappingManager.js
 │   │   ├── helper
 │   │   │   └── constants.js
 │   │   ├── SettingPage.js
 │   │   └── tabs
 │   │       ├── GeneralTab.js
+│   │       ├── PermissionTab.js
 │   │       └── SyncDataTab.js
 │   ├── summary
 │   │   ├── SummaryPage.js
@@ -198,10 +251,14 @@
 │   │       ├── TimeDriverTab.js
 │   │       ├── TruckDetailTab.js
 │   │       └── TruckUsageTab.js
+│   ├── task
+│   │   └── TaskPage.js
+│   ├── tracking
+│   │   └── TrackingPage.js
 │   ├── updateCoordinate
 │   │   ├── components
-│   │   │   ├── MapLocation.js
-│   │   │   └── TableData.js
+│   │   │   ├── CustomTable.js
+│   │   │   └── MapLocation.js
 │   │   ├── help.js
 │   │   ├── modal
 │   │   │   └── CustomerHistoryModal.js
@@ -217,74 +274,93 @@
 └── lib
     ├── api
     │   ├── base.js
-    │   ├── drivers.js
-    │   ├── fieldsApi.js
-    │   ├── hubs.js
-    │   ├── index.js
-    │   ├── pendingDetails.js
-    │   ├── reasons.js
-    │   ├── results.js
-    │   ├── roles.js
-    │   ├── tasks.js
-    │   ├── trash.js
-    │   ├── truckUsage.js
-    │   ├── users.js
-    │   ├── vehicleMappings.js
-    │   ├── vehicles.js
-    │   └── vehicleTypes.js
+    │   ├── mceasy
+    │   │   ├── index.js
+    │   │   ├── odometer.js
+    │   │   ├── tracking.js
+    │   │   ├── users.js
+    │   │   └── vehicles.js
+    │   └── mileapp
+    │       ├── drivers.js
+    │       ├── fields.js
+    │       ├── hubs.js
+    │       ├── index.js
+    │       ├── pendingDetails.js
+    │       ├── reasons.js
+    │       ├── results.js
+    │       ├── roles.js
+    │       ├── tasks.js
+    │       ├── trash.js
+    │       ├── truckUsage.js
+    │       ├── users.js
+    │       ├── vehicleMappings.js
+    │       ├── vehicles.js
+    │       └── vehicleTypes.js
     ├── dictionary.js
     ├── driverData.js
     ├── hooks
     │   ├── useSummaryData.js
+    │   ├── useSuperadmin.js
     │   └── useVehicleTagCheck.js
     ├── localStorageHandler.js
     ├── prisma.js
     ├── reportGenerators
-    │   ├── bread
-    │   │   └── breadReport.js
     │   ├── helper
     │   │   ├── convertLocationHistories.js
     │   │   ├── index.js
     │   │   └── isTripInShift.js
-    │   ├── index.js
-    │   ├── kpi
-    │   │   ├── groups
-    │   │   │   ├── groupFive.js
-    │   │   │   ├── groupFour.js
-    │   │   │   ├── groupOne.js
-    │   │   │   ├── groupThree.js
-    │   │   │   ├── groupTwo.js
-    │   │   │   └── index.js
-    │   │   ├── kpiReport.js
-    │   │   └── sheets
-    │   │       ├── index.js
-    │   │       ├── sheetDataKPI.js
-    │   │       ├── sheetDataRouting.js
-    │   │       ├── sheetPendingSO.js
-    │   │       ├── sheetRouteReview.js
-    │   │       └── sheetStartFinish.js
     │   ├── reports
-    │   │   ├── AutoReport.js
-    │   │   ├── builders.js
-    │   │   ├── help.js
-    │   │   ├── ManualReport.js
-    │   │   └── parsers.js
-    │   ├── summary
-    │   │   ├── sheets
-    │   │   │   ├── distanceSummarySheet.js
-    │   │   │   ├── index.js
-    │   │   │   ├── pendingReasonSheet.js
-    │   │   │   ├── reportStyles.js
-    │   │   │   ├── routingTimeSheet.js
-    │   │   │   ├── taskSummarySheet.js
-    │   │   │   ├── timeDriverSheet.js
-    │   │   │   ├── truckDetailSheet.js
-    │   │   │   └── truckUsageSheet.js
-    │   │   └── summaryReport.js
-    │   ├── taskCounter
-    │   │   └── taskCountReport.js
-    │   └── taskDetail
-    │       └── taskDetailReport.js
+    │   │   ├── bread
+    │   │   │   └── breadReport.js
+    │   │   ├── custom
+    │   │   │   └── customReport.js
+    │   │   ├── daily
+    │   │   │   ├── AutoReport.js
+    │   │   │   ├── help.js
+    │   │   │   ├── ManualReport.js
+    │   │   │   ├── parsers.js
+    │   │   │   └── sheet
+    │   │   │       ├── distanceSummarySheet.js
+    │   │   │       ├── helpSheet.js
+    │   │   │       ├── index.js
+    │   │   │       ├── pendingSOSheet.js
+    │   │   │       ├── routingDateSheet.js
+    │   │   │       ├── shared.js
+    │   │   │       ├── timeDriverSheet.js
+    │   │   │       ├── truckDetailSheet.js
+    │   │   │       ├── truckUsageSheet.js
+    │   │   │       └── updateLonglatSheet.js
+    │   │   ├── index.js
+    │   │   ├── kpi
+    │   │   │   ├── groups
+    │   │   │   │   ├── groupFive.js
+    │   │   │   │   ├── groupFour.js
+    │   │   │   │   ├── groupOne.js
+    │   │   │   │   ├── groupThree.js
+    │   │   │   │   ├── groupTwo.js
+    │   │   │   │   └── index.js
+    │   │   │   ├── kpiReport.js
+    │   │   │   └── sheets
+    │   │   │       ├── index.js
+    │   │   │       ├── sheetDataKPI.js
+    │   │   │       ├── sheetDataRouting.js
+    │   │   │       ├── sheetPendingSO.js
+    │   │   │       ├── sheetRouteReview.js
+    │   │   │       └── sheetStartFinish.js
+    │   │   └── taskCounter
+    │   │       └── taskCountReport.js
+    │   └── summary
+    │       ├── sheets
+    │       │   ├── distanceSummarySheet.js
+    │       │   ├── index.js
+    │       │   ├── pendingReasonSheet.js
+    │       │   ├── reportStyles.js
+    │       │   ├── routingTimeSheet.js
+    │       │   ├── taskSummarySheet.js
+    │       │   ├── timeDriverSheet.js
+    │       │   ├── truckDetailSheet.js
+    │       │   └── truckUsageSheet.js
+    │       └── summaryReport.js
+    ├── routingActual.js
     ├── toast.js
-    ├── unifiedRouting.js
     └── utils.js

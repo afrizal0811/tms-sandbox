@@ -1,3 +1,4 @@
+import { routingActualSheet } from '@/lib/routingActual';
 import {
   calculateMinuteDifference,
   formatCoordinates,
@@ -11,21 +12,20 @@ import {
 } from '@/lib/utils';
 import * as XLSX from 'xlsx-js-style';
 import {
-  buildDistanceSummary,
-  buildMergedDetailSheet,
-  buildPendingSOSheet,
-  buildRoVsRealSheet,
-  buildStartFinishSheet,
-  buildTanggalRoutingSheet,
-  buildTruckUsageSheet,
-  buildUpdateLonglatSheet,
-} from './builders';
-import {
   buildDriverMaps,
   buildNormalizedMappings,
   FAILED_STATUSES,
   PENDING_SHEET_STATUSES_BASE,
 } from './help';
+import {
+  buildDistanceSummary,
+  buildPendingSOSheet,
+  buildRoutingDateSheet,
+  buildTimeDriverSheet,
+  buildTruckDetailSheet,
+  buildTruckUsageSheet,
+  buildUpdateLonglatSheet,
+} from './sheet';
 
 function parseToNum(val) {
   if (typeof val === 'number') return val;
@@ -42,14 +42,49 @@ function ultraNormalize(str) {
     .toLowerCase();
 }
 
+function findFuzzyCategory(normalizedMappings, str) {
+  const dbKeys = Object.keys(normalizedMappings);
+  for (const dbKey of dbKeys) {
+    if (dbKey.length > 3 && (str.includes(dbKey) || dbKey.includes(str))) {
+      return normalizedMappings[dbKey];
+    }
+  }
+  return undefined;
+}
+
+function deriveCategoryFromType(typeStr) {
+  const tCat = typeStr || '';
+  if (!tCat) return undefined;
+  const pts = String(tCat).split('-');
+  let sType = pts.length > 1 ? pts[1].toUpperCase() : pts[0].toUpperCase();
+  if (pts.length > 2 && pts[2].toUpperCase() === 'LONG') {
+    if (['CDE', 'CDD', 'FUSO'].includes(sType)) sType = `${sType}-LONG`;
+  }
+  return sType;
+}
+
 async function parseManualRouting(routingBuffers, driverData, mappingsObj, vehicleTypes) {
   const routingMap = new Map();
   const truckUsageCount = {};
+  const seenTrucks = new Set();
   const { emailMap, platMap } = buildDriverMaps(driverData);
   const normalizedMappings = buildNormalizedMappings(mappingsObj);
 
-  vehicleTypes.forEach((v) => {
-    truckUsageCount[String(v).toUpperCase()] = { Dry: 0, Frozen: 0 };
+  driverData.forEach((d) => {
+    const basePlateStr = ultraNormalize(d?.plat);
+    let cat = normalizedMappings[basePlateStr];
+    if (!cat && basePlateStr) {
+      const found = findFuzzyCategory(normalizedMappings, basePlateStr);
+      if (found) cat = found;
+    }
+    if (!cat) {
+      const derived = deriveCategoryFromType(d?.type);
+      if (derived !== undefined) cat = derived;
+    }
+    if (cat) {
+      const uCat = String(cat).toUpperCase();
+      if (!truckUsageCount[uCat]) truckUsageCount[uCat] = { Dry: 0, Frozen: 0 };
+    }
   });
 
   for (const fileBuffer of routingBuffers) {
@@ -138,7 +173,6 @@ async function parseManualRouting(routingBuffers, driverData, mappingsObj, vehic
       let category = '';
       const basePlateStr = ultraNormalize(cleanPlat);
       const originalRawStr = ultraNormalize(rawAssignee || rawPlate);
-      const dbKeys = Object.keys(normalizedMappings);
       let mapped = false;
 
       if (basePlateStr && normalizedMappings[basePlateStr]) {
@@ -148,50 +182,35 @@ async function parseManualRouting(routingBuffers, driverData, mappingsObj, vehic
         category = normalizedMappings[originalRawStr];
         mapped = true;
       } else {
-        for (const dbKey of dbKeys) {
-          if (
-            dbKey.length > 3 &&
-            (originalRawStr.includes(dbKey) || dbKey.includes(originalRawStr))
-          ) {
-            category = normalizedMappings[dbKey];
+        const fuzzyByRaw = findFuzzyCategory(normalizedMappings, originalRawStr);
+        if (fuzzyByRaw) {
+          category = fuzzyByRaw;
+          mapped = true;
+        } else if (basePlateStr) {
+          const fuzzyByPlate = findFuzzyCategory(normalizedMappings, basePlateStr);
+          if (fuzzyByPlate) {
+            category = fuzzyByPlate;
             mapped = true;
-            break;
-          }
-        }
-        if (!mapped && basePlateStr) {
-          for (const dbKey of dbKeys) {
-            if (
-              dbKey.length > 3 &&
-              (basePlateStr.includes(dbKey) || dbKey.includes(basePlateStr))
-            ) {
-              category = normalizedMappings[dbKey];
-              mapped = true;
-              break;
-            }
           }
         }
       }
 
       if (!mapped) {
-        let tempCategory = driverInfo?.type || '';
-        if (tempCategory) {
-          const parts = String(tempCategory).split('-');
-          let specificType = parts.length > 1 ? parts[1].toUpperCase() : parts[0].toUpperCase();
-          if (parts.length > 2 && parts[2].toUpperCase() === 'LONG') {
-            if (['CDE', 'CDD', 'FUSO'].includes(specificType))
-              specificType = `${specificType}-LONG`;
-          }
-          category = specificType;
-        }
+        const derived = deriveCategoryFromType(driverInfo?.type);
+        if (derived !== undefined) category = derived;
       }
 
       category = category ? String(category).toUpperCase() : '';
       const storageType = (driverInfo?.storage || 'DRY').toUpperCase();
 
-      if (category) {
-        if (!truckUsageCount[category]) truckUsageCount[category] = { Dry: 0, Frozen: 0 };
-        if (storageType === 'FROZEN') truckUsageCount[category]['Frozen'] += 1;
-        else truckUsageCount[category]['Dry'] += 1;
+      if (category && basePlat) {
+        const truckKey = `${category}_${storageType}_${basePlat}`;
+        if (!seenTrucks.has(truckKey)) {
+          seenTrucks.add(truckKey);
+          if (!truckUsageCount[category]) truckUsageCount[category] = { Dry: 0, Frozen: 0 };
+          if (storageType === 'FROZEN') truckUsageCount[category]['Frozen'] += 1;
+          else truckUsageCount[category]['Dry'] += 1;
+        }
       }
     }
   }
@@ -318,11 +337,14 @@ async function parseManualDelivery(deliveryBuffers, driverData, hasPendingGR, se
           missingDataCustomers: [],
         };
         stats.totalOutlet += 1;
-        if (FAILED_STATUSES.includes(statusLabel)) stats.failedCount += 1;
+        const isOngoingTask = statusLabel === 'ONGOING' || taskStatus === 'ONGOING';
+        if (FAILED_STATUSES.includes(statusLabel) || isOngoingTask) {
+          stats.failedCount += 1;
+        }
 
         const startDateOnly = startTime ? startTime.split(/[T\s]/)[0] : null;
-        const doneDateOnly = doneTime ? doneTime.split(/[T\s]/)[0] : null;
-        if (startDateOnly && doneDateOnly && startDateOnly !== doneDateOnly) {
+        const doneDateOnly = doneTime && doneTime !== '-' ? doneTime.split(/[T\s]/)[0] : null;
+        if (startDateOnly && doneDateOnly && startDateOnly !== doneDateOnly && !isOngoingTask) {
           const parts = doneDateOnly.split('-');
           stats.mismatchCustomers.push({
             name: customerName,
@@ -491,16 +513,74 @@ export async function generateManualReportWorkbook({
   const { deliveryMap, hubTimesMap, allTaskDataForSequence, updateLonglatData, pendingSOData } =
     await parseManualDelivery(deliveryBuffers, driverData, hasPendingGR, selectedDateString);
 
-  buildTanggalRoutingSheet(wb, targetRoutingStr, t);
-  buildStartFinishSheet(wb, timeData, t, driverData);
-  buildMergedDetailSheet(wb, driverData, routingMap, deliveryMap, t);
-  buildRoVsRealSheet(wb, allTaskDataForSequence, hubTimesMap, driverData, hasPendingGR, t);
+  const manualRoVsRealData = [];
+  const tasksByGroupMap = new Map();
+  const groupStats = new Map();
+
+  allTaskDataForSequence.forEach((task) => {
+    if (task.driver === 'N/A' || task.statusLabel === 'UNASSIGNED') return;
+    const gKey = task.groupKey || `${task.driver}_${getBasePlate(task.plat) || task.plat || ''}`;
+    if (!tasksByGroupMap.has(gKey)) tasksByGroupMap.set(gKey, []);
+    tasksByGroupMap.get(gKey).push(task);
+    if (!groupStats.has(gKey)) {
+      groupStats.set(gKey, { driver: task.driver, plat: task.plat });
+    }
+  });
+
+  const sortDrivers = Array.from(groupStats.entries()).sort((a, b) => {
+    if (a[1].plat !== b[1].plat) return (a[1].plat || '').localeCompare(b[1].plat || '');
+    return (a[1].driver || '').localeCompare(b[1].driver || '');
+  });
+
+  for (const [gKey, stats] of sortDrivers) {
+    const driverTasks = tasksByGroupMap.get(gKey) || [];
+    const hubTimes = hubTimesMap.get(gKey) ||
+      hubTimesMap.get(stats.driver) || { hubETD: '-', hubETA: '-' };
+
+    manualRoVsRealData.push({
+      type: 'HUB_START',
+      driver: stats.driver,
+      plat: stats.plat,
+      time: hubTimes.hubETD,
+      customerName: 'HUB',
+    });
+
+    driverTasks.sort((a, b) => (a.roSequence || 0) - (b.roSequence || 0));
+    driverTasks.forEach((t) => {
+      manualRoVsRealData.push({
+        type: 'TASK',
+        ...t,
+        isManualAssign:
+          isEmpty(t.eta) ||
+          t.eta === '-' ||
+          isEmpty(t.etd) ||
+          t.etd === '-' ||
+          isEmpty(t.roSequence) ||
+          t.roSequence === 0,
+      });
+    });
+
+    manualRoVsRealData.push({
+      type: 'HUB_END',
+      driver: stats.driver,
+      plat: stats.plat,
+      time: hubTimes.hubETA,
+      customerName: 'HUB',
+    });
+
+    manualRoVsRealData.push({ type: 'SPACER' });
+  }
+
+  buildRoutingDateSheet(wb, targetRoutingStr, t);
+  buildTimeDriverSheet(wb, timeData, t, driverData);
+  buildTruckDetailSheet(wb, driverData, routingMap, deliveryMap, t);
+  routingActualSheet(wb, manualRoVsRealData, t);
   buildTruckUsageSheet(wb, truckUsageCount, vehicleTypes, t);
   buildDistanceSummary(wb, driverData, routingMap, timeData, t);
   buildPendingSOSheet(wb, pendingSOData, hasPendingGR, t);
   buildUpdateLonglatSheet(wb, updateLonglatData, t);
   const formattedDate = formatDateUniversal(selectedDateString, 'DD.MM.YYYY');
-  const excelFileName = `Manual ${t('report.daily_report')} - ${formattedDate} - ${hubLabel}.xlsx`;
+  const excelFileName = `Manual ${t('daily_report')} - ${formattedDate} - ${hubLabel}.xlsx`;
 
   return { wb, excelFileName };
 }

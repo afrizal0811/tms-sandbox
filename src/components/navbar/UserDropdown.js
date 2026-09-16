@@ -10,17 +10,17 @@ import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import LanguageToggle from '../LanguageToggle';
-import ThemeToggle from '../ThemeToggle';
+import LanguageToggle from '../button/LanguageToggle';
+import ThemeToggle from '../button/ThemeToggle';
 
 export default function UserDropdown({ isDarkMode }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
   const { t } = useLanguage();
   const { setTheme } = useTheme();
   const dropdownRef = useRef(null);
   const pathname = usePathname();
-
-  const [isOpen, setIsOpen] = useState(false);
-  const [mounted, setMounted] = useState(false); // State untuk mencegah hydration error
 
   const { showModal, unmappedData, triggerCheck, handleMappingCompleted } = useVehicleTagCheck();
 
@@ -33,13 +33,12 @@ export default function UserDropdown({ isDarkMode }) {
           return capitalizeText(user.name || '');
         }
       } catch (e) {
-        toastError(t('common.toast.error', { err: e.message }));
+        toastError(t('common.toast.error', { err: e.message }), e);
       }
     }
     return '';
   });
 
-  // Mencegah hydration mismatch error
   useEffect(() => {
     const timer = setTimeout(() => {
       setMounted(true);
@@ -105,30 +104,25 @@ export default function UserDropdown({ isDarkMode }) {
         </button>
 
         {isOpen && (
-          <div className="mt-2 rounded-md ring-1 ring-black dark:ring-slate-700 ring-opacity-5 dark:ring-opacity-100 focus:outline-none z-50 animate-in fade-in zoom-in-95 duration-100 relative w-full shadow-none border overflow-hidden border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 lg:absolute lg:right-0 lg:w-56 lg:shadow-lg lg:border-none lg:bg-white lg:dark:bg-slate-800">
+          <div className="mt-2 rounded-md ring-1 ring-slate-100 dark:ring-slate-700 ring-opacity-50 dark:ring-opacity-100 focus:outline-none z-50 animate-in fade-in zoom-in-95 duration-100 relative w-full shadow-none border overflow-hidden border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 lg:absolute lg:right-0 lg:w-64 lg:shadow-lg lg:border-none lg:bg-white lg:dark:bg-slate-800">
             <div>
               <ThemeToggle
-                isActive={isDarkMode}
+                label={isDarkMode ? t('common.dark_mode') : t('common.light_mode')}
+                isDarkMode={isDarkMode}
                 onToggle={() => setTheme(isDarkMode ? 'light' : 'dark')}
-                darkLabel={t('common.dark_mode')}
-                lightLabel={t('common.light_mode')}
                 className="text-sm px-4"
               />
-
-              {/* Menggunakan LanguageToggle baru */}
               <LanguageToggle showLabel={true} className="text-sm px-4" />
-
               <Link
                 href="/setting"
                 onClick={() => setIsOpen(false)}
-                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 text-slate-700 dark:text-slate-300 hover:bg-sky-50 dark:hover:bg-slate-700 hover:text-sky-600 dark:hover:text-sky-400 transition-colors cursor-pointer border-t border-gray-100 dark:border-slate-700/50"
+                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 text-slate-700 dark:text-slate-300 hover:bg-sky-50 dark:hover:bg-slate-700 hover:text-sky-600 dark:hover:text-sky-400 transition-colors cursor-pointer"
               >
                 {t('navbar.setting')}
               </Link>
-
               <button
                 onClick={handleLogout}
-                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer"
+                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer border-t border-gray-100 dark:border-slate-700/50"
               >
                 {t('navbar.logout')}
               </button>

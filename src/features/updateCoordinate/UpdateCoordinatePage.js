@@ -1,11 +1,10 @@
 'use client';
 
-import Button from '@/components/Button';
-import BodyCard from '@/components/card/BodyCard';
-import HeaderCard from '@/components/card/HeaderCard';
+import Button from '@/components/button/Button';
 import CustomDatePicker from '@/components/CustomDatePicker';
+import PageTemplate from '@/components/page/PageTemplate';
 import { useLanguage } from '@/context/LanguageContext';
-import { getTasks } from '@/lib/api';
+import { getTasks } from '@/lib/api/mileapp';
 import { getDriverData } from '@/lib/driverData';
 import { getLocalStorage } from '@/lib/localStorageHandler';
 import { toastError } from '@/lib/toast';
@@ -20,7 +19,7 @@ import {
   tomorrowDate,
 } from '@/lib/utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import TableData from './components/TableData';
+import CustomTable from './components/CustomTable';
 import { handleDownloadExcel } from './help';
 
 export default function UpdateCoordinatePage() {
@@ -81,7 +80,6 @@ export default function UpdateCoordinatePage() {
       try {
         if (typeof window === 'undefined') return;
         const { storedLocation: hubId } = getLocalStorage();
-        if (!hubId) throw new Error(t('common.no_data'));
 
         const localStart = new Date(selectedDate);
         localStart.setHours(0, 0, 0, 0);
@@ -99,8 +97,6 @@ export default function UpdateCoordinatePage() {
             hubId,
             timeFrom,
             timeTo,
-            timeBy: 'startTime',
-            limit: 1000,
           }),
         ]);
 
@@ -136,7 +132,7 @@ export default function UpdateCoordinatePage() {
         setLoading(false);
       } catch (err) {
         if (mountedContext && !mountedContext.isMounted) return;
-        toastError(t('common.toast.error', { err: err.message }));
+        toastError(t('common.toast.error', { err: err.message }), err);
         setLoading(false);
       }
     },
@@ -218,26 +214,26 @@ export default function UpdateCoordinatePage() {
   );
 
   return (
-    <div className="w-full max-w-none px-4 sm:px-6 pb-2">
-      <HeaderCard title={t('longlat.title')} subtitle={subtitle} items={headerItems} />
-      <BodyCard
-        isEmpty={!loading && isEmpty(processedData)}
-        emptyMessage={emptyMessage}
-        isLoading={loading}
-      >
-        <div className="p-0 h-full overflow-y-auto">
-          <TableData
-            data={processedData}
-            historyMap={historyMap}
-            selectedDate={selectedDate}
-            t={t}
-            localeCode={localeCode}
-          />
-        </div>
-      </BodyCard>
-      <span className="mt-2 block text-xs text-amber-600 text-right italic">
-        {t('longlat.table_detail')}
-      </span>
-    </div>
+    <PageTemplate
+      title={t('longlat.title')}
+      subtitle={subtitle}
+      headerItems={headerItems}
+      isEmpty={!loading && isEmpty(processedData)}
+      emptyMessage={emptyMessage}
+      isLoading={loading}
+      footer={{
+        text: t('common.click_for_detail'),
+      }}
+    >
+      <div className="p-0 h-full overflow-y-auto">
+        <CustomTable
+          data={processedData}
+          historyMap={historyMap}
+          selectedDate={selectedDate}
+          t={t}
+          localeCode={localeCode}
+        />
+      </div>
+    </PageTemplate>
   );
 }

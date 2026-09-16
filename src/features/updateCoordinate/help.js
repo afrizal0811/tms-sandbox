@@ -14,11 +14,11 @@ export const handleDownloadExcel = (processedData, setIsDownloading, selectedDat
     const wb = XLSX.utils.book_new();
     const headers = [
       'No',
-      t('common.so_number'),
+      t('common.invoice_number'),
       t('common.customer_name'),
       t('common.customer_id'),
       t('common.location_id'),
-      t('longlat.table.new_longlat'),
+      t('common.coord_new'),
       t('common.dist_diff'),
       t('common.driver'),
       t('longlat.table.update_time'),
@@ -91,7 +91,7 @@ export const handleDownloadExcel = (processedData, setIsDownloading, selectedDat
     XLSX.writeFile(wb, fileName);
     toastSuccess(t('common.toast.success'));
   } catch (e) {
-    toastError(t('common.toast.error', { err: e.message }));
+    toastError(t('common.toast.error', { err: e.message }), e);
   } finally {
     setIsDownloading(false);
   }

@@ -99,10 +99,10 @@ export function calculateMinuteDifference(time1, time2) {
 
     if (isNaN(date1.getTime()) || isNaN(date2.getTime())) return null;
 
-    const minutes1 = date1.getHours() * 60 + date1.getMinutes();
-    const minutes2 = date2.getHours() * 60 + date2.getMinutes();
+    const m1 = Math.floor(date1.getTime() / 60000);
+    const m2 = Math.floor(date2.getTime() / 60000);
 
-    return Math.abs(minutes1 - minutes2);
+    return Math.abs(m2 - m1);
   } catch (e) {
     return null;
   }
@@ -111,7 +111,15 @@ export function calculateMinuteDifference(time1, time2) {
 // Memecah string data pelanggan menjadi Nama, ID, dan Lokasi berdasarkan pola pemisah tertentu
 export function parseCustomerString(fullString) {
   if (!fullString || typeof fullString !== 'string') {
-    return { name: '', id: null, location: null, fullCustomerName: '', invoiceNumber: '' };
+    return {
+      name: '',
+      id: null,
+      location: null,
+      fullCustomerName: '',
+      invoiceNumber: '',
+      truncateInvoice: '',
+      isTruncated: false,
+    };
   }
 
   const parts = fullString.split(/\s+-\s+/);
@@ -124,7 +132,8 @@ export function parseCustomerString(fullString) {
 
   let location = null;
   let invoiceNumber = '';
-
+  let truncateInvoice = '';
+  let isTruncated = false;
   if (parts.length > 2) {
     const rawLocation = parts[parts.length - 1];
     const commaSplit = rawLocation.split(',');
@@ -137,12 +146,22 @@ export function parseCustomerString(fullString) {
     id = commaSplit[0].trim();
     invoiceNumber = commaSplit.slice(1).join(', ').trim();
   }
+  if (invoiceNumber) {
+    const orderParts = invoiceNumber.split(',').filter(Boolean);
+    isTruncated = orderParts.length > 1;
+    if (isTruncated) {
+      truncateInvoice = `${orderParts[0].trim()} (+${orderParts.length - 1})`;
+    } else if (orderParts.length === 1) {
+      truncateInvoice = orderParts[0].trim();
+    }
+  }
+
   location = location !== null ? location : '';
 
   const name = parts[0] && parts[0] !== id ? parts[0] : '';
   const fullCustomerName = id !== '' || location !== '' ? `${name} - ${id} - ${location}` : name;
 
-  return { name, id, location, fullCustomerName, invoiceNumber };
+  return { name, id, location, fullCustomerName, invoiceNumber, isTruncated, truncateInvoice };
 }
 
 // Menentukan tipe penyimpanan
@@ -281,12 +300,6 @@ export function formatUTC7(timestampStr, pattern = 'YYYY-MM-DD') {
   return result;
 }
 
-// Menghitung durasi format HH:mm
-export function calculateDurationAsQuotedHHMM(startTimeStr, finishTimeStr) {
-  const totalMinutes = calculateMinuteDifference(startTimeStr, finishTimeStr);
-  return formatMinutesToHHMM(totalMinutes);
-}
-
 // Mengecek hari Minggu
 export const isDateSunday = (dateStr) => {
   const date = new Date(dateStr.replace(/-/g, '/'));
@@ -303,14 +316,15 @@ export const formatTimer = (seconds) => {
 };
 
 // Memformat tanggal panjang
-export function formatLongDate(dateInput, language = 'id-ID') {
+export function formatLongDate(dateInput, language = 'id-ID', withDate = true) {
   if (!dateInput) return '-';
+  let config = {
+    month: 'long',
+    year: 'numeric',
+  };
+  if (withDate) config.day = 'numeric';
   try {
-    return new Date(dateInput).toLocaleDateString(language, {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
+    return new Date(dateInput).toLocaleDateString(language, config);
   } catch (e) {
     return '-';
   }
@@ -319,6 +333,9 @@ export function formatLongDate(dateInput, language = 'id-ID') {
 // Mengecek nilai kosong
 export function isEmpty(value) {
   if (Array.isArray(value)) return value.length === 0;
+  if (value && typeof value === 'object') {
+    return Object.keys(value).length === 0;
+  }
   return (
     !value ||
     value === undefined ||
@@ -342,6 +359,12 @@ export function toApiDateString(dateInput) {
 export const capitalizeText = (text = '') =>
   text.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
+// Mengubah teks ke Proper Case
+export const ProperCaseText = (str) => {
+  if (!str) return '';
+  return str.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+};
+
 // Menghasilkan tanggal besok atau minggu depan
 export const tomorrowDate = (isTomorrow = true) => {
   const date = new Date();
@@ -361,19 +384,27 @@ export const tomorrowDate = (isTomorrow = true) => {
 // Pola format SO yang valid: 2-5 huruf + 4 digit + strip + 6 digit
 const SO_PATTERN = /^[A-Z]{2,5}\d{4}-\d{6}$/i;
 
-// Membersihkan karakter aneh & menstandarkan format satu nomor SO
 export function standardizeSo(rawSo) {
   const clean = String(rawSo).replace(/[^a-zA-Z0-9-]/g, '');
-  const match = clean.match(/^([a-zA-Z]{2,5})(\d{4})-(\d+)$/);
-  return match ? `${match[1].toUpperCase()}${match[2]}-${match[3].padStart(6, '0')}` : clean;
+  const matchStrict = clean.match(/^([a-zA-Z]{2,5})(\d{4})-(\d+)$/);
+  if (matchStrict)
+    return `${matchStrict[1].toUpperCase()}${matchStrict[2]}-${matchStrict[3].padStart(6, '0')}`;
+
+  const matchBypass = clean.match(/^([a-zA-Z]{2,5})(\d{4})-(\d+)(.+)$/);
+  if (matchBypass)
+    return `${matchBypass[1].toUpperCase()}${matchBypass[2]}-${matchBypass[3].padStart(6, '0')}${matchBypass[4]}`;
+
+  return clean;
 }
 
-// Cek satu nomor (raw atau udah distandarkan) sesuai pola SO
 export function isValidSo(so) {
   return SO_PATTERN.test(so);
 }
 
-// Cek satu raw SO invalid, mempertimbangkan status customer (bad cust = otomatis invalid)
+export function isBypassSo(so) {
+  return /^[A-Z]{2,5}\d{4}-\d{6}.+$/i.test(so);
+}
+
 export function checkInvalidSo(rawSo, isBadCust = false) {
   if (isBadCust) return true;
   return !isValidSo(standardizeSo(rawSo));
@@ -478,5 +509,59 @@ export function sortRows(rows, platKey, driverKey) {
     const rankB = getSortGroup(b[platKey]);
     if (rankA !== rankB) return rankA - rankB;
     return (a[driverKey] || '').localeCompare(b[driverKey] || '');
+  });
+}
+
+// Hitung manual jarak customer akhir ke hub
+export function calculateReturnHubDistance(taskList, hubCoordsStr) {
+  if (!hubCoordsStr || !taskList || taskList.length === 0) return 0;
+
+  const sortedTasks = [...taskList].sort((a, b) => {
+    const roA = a.roSequence ?? a.routePlannedOrder ?? 9999;
+    const roB = b.roSequence ?? b.routePlannedOrder ?? 9999;
+    return roA - roB;
+  });
+
+  const lastTask = sortedTasks[sortedTasks.length - 1];
+
+  const targetCoord =
+    lastTask.expectedCoordinate ||
+    lastTask.expectedCoord ||
+    lastTask.doneCoordinate ||
+    lastTask.doneCoord ||
+    null;
+
+  if (targetCoord) {
+    const rawDistance = getDistance(targetCoord, hubCoordsStr);
+    if (rawDistance !== null) {
+      return Math.round(rawDistance * 1.3);
+    }
+  }
+
+  return 0;
+}
+
+export const getBaseVehicleType = (typeStr, knownTypes = []) => {
+  if (!typeStr) return '';
+  const upperStr = typeStr.toUpperCase();
+  const sortedKnown = [...knownTypes].sort((a, b) => b.length - a.length);
+  const match = sortedKnown.find((k) => upperStr.includes(k.toUpperCase()));
+  if (match) return match.toUpperCase();
+
+  const parts = upperStr.split('-');
+  const typeParts = parts.filter((p) => !['FROZEN', 'DRY'].includes(p));
+  if (typeParts.length === 0) return typeStr;
+  let base = typeParts[0];
+  if (typeParts.length > 1 && typeParts[1] === 'LONG') base = `${base}-LONG`;
+  return base;
+};
+
+export function formatOdometer(value, locale = 'id-ID') {
+  if (isEmpty(value)) {
+    return '-';
+  }
+  return Number(value).toLocaleString(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
 }

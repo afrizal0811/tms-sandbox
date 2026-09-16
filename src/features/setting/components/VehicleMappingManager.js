@@ -1,12 +1,12 @@
 'use client';
 
 import ConfirmModal from '@/components/modal/ConfirmModal';
-import { deleteVehicleMapping, getVehicleMappings, updateVehicleMapping } from '@/lib/api';
+import { deleteVehicleMapping, getVehicleMappings, updateVehicleMapping } from '@/lib/api/mileapp';
 import { getLocalStorage } from '@/lib/localStorageHandler';
 import { toastError, toastSuccess } from '@/lib/toast';
 import { useCallback, useEffect, useState } from 'react';
 import Card from './Card';
-import Table from './Table';
+import CustomTable from './CustomTable';
 
 export default function VehicleMappingManager({ vehicleTypes, isReadOnly, translate }) {
   const [activeHub, setActiveHub] = useState({ hubId: '', hubName: '' });
@@ -33,10 +33,8 @@ export default function VehicleMappingManager({ vehicleTypes, isReadOnly, transl
       const data = await getVehicleMappings(activeHub.hubId);
       const sortedData = data.sort((a, b) => a.plat.localeCompare(b.plat));
       setMappings(sortedData);
-    } catch (error) {
-      toastError(
-        translate ? translate('common.toast.error', { err: error.message }) : error.message
-      );
+    } catch (e) {
+      toastError(translate('common.toast.error', { err: e.message }), e);
     } finally {
       setIsLoading(false);
     }
@@ -52,9 +50,9 @@ export default function VehicleMappingManager({ vehicleTypes, isReadOnly, transl
       await updateVehicleMapping(id, item.plat, editValues.mappedType);
       toastSuccess(translate('common.toast.success'));
       await loadMappings();
-    } catch (error) {
-      toastError(translate('common.toast.error', { err: error.message }));
-      throw error;
+    } catch (e) {
+      toastError(translate('common.toast.error', { err: e.message }), e);
+      throw e;
     }
   };
 
@@ -69,9 +67,9 @@ export default function VehicleMappingManager({ vehicleTypes, isReadOnly, transl
       await deleteVehicleMapping(targetId, targetPlat);
       toastSuccess(translate('common.toast.success'));
       await loadMappings();
-    } catch (error) {
+    } catch (e) {
       setIsLoading(false);
-      toastError(translate('common.toast.error', { err: error.message }));
+      toastError(translate('common.toast.error', { err: e.message }), e);
     }
   };
 
@@ -113,7 +111,7 @@ export default function VehicleMappingManager({ vehicleTypes, isReadOnly, transl
     },
   ];
 
-  const title = translate('setting.tab.general.mapping_title');
+  const msgParts = translate('common.modal.confirm_message', { text: '|||' }).split('|||');
 
   return (
     <Card>
@@ -121,10 +119,16 @@ export default function VehicleMappingManager({ vehicleTypes, isReadOnly, transl
         isOpen={deleteConfig.isOpen}
         onCancel={() => setDeleteConfig({ isOpen: false, id: null, plat: null })}
         onConfirm={confirmDelete}
-        title={translate('common.modal.confirm_title', { text: title })}
-        message={translate('common.modal.confirm_message', {
-          text: title.toLowerCase(),
+        title={translate('common.modal.confirm_title', {
+          text: translate('setting.tab.general.mapping_title'),
         })}
+        message={
+          <span>
+            {msgParts[0]}
+            <strong>{deleteConfig.plat}</strong>
+            {msgParts[1]}
+          </span>
+        }
       />
 
       <div className="mb-4 border-b border-gray-100 pb-3">
@@ -136,7 +140,7 @@ export default function VehicleMappingManager({ vehicleTypes, isReadOnly, transl
         </p>
       </div>
 
-      <Table
+      <CustomTable
         data={mappings}
         columns={columns}
         isReadOnly={isReadOnly}

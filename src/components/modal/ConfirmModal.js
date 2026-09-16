@@ -1,7 +1,7 @@
 'use client';
 
-import BaseModal from '@/components/BaseModal';
-import Button from '@/components/Button';
+import Button from '@/components/button/Button';
+import Modal from '@/components/modal/Modal';
 import { useLanguage } from '@/context/LanguageContext';
 import { useEffect, useState } from 'react';
 
@@ -19,7 +19,6 @@ export default function ConfirmModal({
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // ponytail: [cascading render fix] -> defer execution to macrotask queue
     const timer = setTimeout(() => setMounted(true), 0);
     return () => clearTimeout(timer);
   }, []);
@@ -41,18 +40,11 @@ export default function ConfirmModal({
   );
 
   return (
-    <BaseModal
-      isOpen={isOpen}
-      onClose={onCancel}
-      title={title}
-      maxWidth="max-w-sm"
-      footer={footer}
-      headerClassName="bg-slate-800 text-white"
-    >
+    <Modal isOpen={isOpen} onClose={onCancel} title={title} maxWidth="max-w-sm" footer={footer}>
       <div className="flex justify-center mb-4">
-        <div className="flex items-center justify-center w-12 h-12 bg-slate-700 rounded-full">
+        <div className="flex items-center justify-center w-16 h-16 bg-gray-100 dark:bg-slate-900/30 rounded-full">
           <svg
-            className="w-6 h-6 text-sky-400"
+            className="w-10 h-10 text-sky-400"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
@@ -68,6 +60,6 @@ export default function ConfirmModal({
         </div>
       </div>
       <div className="text-sm text-center text-slate-800 dark:text-gray-400">{message}</div>
-    </BaseModal>
+    </Modal>
   );
 }

@@ -1,16 +1,22 @@
 'use client';
 
-import BodyCard from '@/components/card/BodyCard';
-import HeaderCard from '@/components/card/HeaderCard';
 import CustomDatePicker from '@/components/CustomDatePicker';
-import StorageTypeFilter from '@/components/StorageTypeFilter';
+import StorageTypeFilter from '@/components/dropdown/StorageTypeFilter';
+import VehicleTypeFilter from '@/components/dropdown/VehicleTypeFilter';
+import PageTemplate from '@/components/page/PageTemplate';
 import { useLanguage } from '@/context/LanguageContext';
 import DetailTab from '@/features/dashboard/tab/DetailTab';
 import RoutingVsActualTab from '@/features/dashboard/tab/RoutingVsActualTab';
-import { getResultsSummary, getTasks } from '@/lib/api';
+import { getResults, getTasks } from '@/lib/api/mileapp';
 import { getCachedHubs, getLocalStorage } from '@/lib/localStorageHandler';
 import { toastError, toastWarning } from '@/lib/toast';
-import { isEmpty, normalizeEmail, toApiDateString, tomorrowDate } from '@/lib/utils';
+import {
+  getBaseVehicleType,
+  isEmpty,
+  normalizeEmail,
+  toApiDateString,
+  tomorrowDate,
+} from '@/lib/utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { calculateDashboard } from './help';
 import DiagramTab from './tab/DiagramTab';
@@ -20,7 +26,8 @@ export default function Dashboard({ driverData }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [storageFilter, setStorageFilter] = useState(['DRY', 'FROZEN']);
-  const [isFiltering, setIsFiltering] = useState(false);
+  const [typeFilter, setTypeFilter] = useState('');
+  const [masterVehicleTypes, setMasterVehicleTypes] = useState([]);
   const [rawData, setRawData] = useState({ tasks: [], results: [] });
   const [yearlyTasks, setYearlyTasks] = useState([]);
   const [isYearlyLoading, setIsYearlyLoading] = useState(false);
@@ -55,16 +62,6 @@ export default function Dashboard({ driverData }) {
     };
     fetchHubSettings();
   }, [hubId, driverData]);
-
-  const handleApplyFilter = (newSelectedTypes) => {
-    fetchStartTimeRef.current = Date.now();
-    setIsFiltering(true);
-
-    setTimeout(() => {
-      setStorageFilter(newSelectedTypes);
-      setIsFiltering(false);
-    }, 200);
-  };
 
   const handleDateChange = (date) => {
     if (!date) return;
@@ -114,32 +111,8 @@ export default function Dashboard({ driverData }) {
     if (isYearlyLoading) setDismissedDots((prev) => ({ ...prev, Diagram: false }));
   }, [isYearlyLoading]);
 
-  const fetchWithRetry = useCallback(async (fn, { retries = 3, baseMs = 700 } = {}) => {
-    let attempt = 0;
-    while (true) {
-      try {
-        return await fn();
-      } catch (err) {
-        attempt++;
-        const status = err?.response?.status || err?.status || null;
-        if (attempt > retries || (status && status >= 400 && status < 500 && status !== 429)) {
-          throw err;
-        }
-        const delay = baseMs * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 100);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-    }
-  }, []);
-
   const fetchData = useCallback(async () => {
-    if (isEmpty(driverData)) {
-      setLoading(false);
-      setRawData({ tasks: [], results: [] });
-      return;
-    }
-
-    if (selectedDate.getDay() === 0) {
-      setLoading(false);
+    if (isEmpty(driverData) || selectedDate.getDay() === 0) {
       setRawData({ tasks: [], results: [] });
       return;
     }
@@ -166,23 +139,17 @@ export default function Dashboard({ driverData }) {
       }
 
       const [tasksData, resultsData] = await Promise.all([
-        fetchWithRetry(() =>
-          getTasks({
-            status: 'DONE,ONGOING,UNASSIGNED',
-            hubId,
-            timeFrom,
-            timeTo,
-            timeBy: 'startTime',
-            limit: 1000,
-          })
-        ),
-        fetchWithRetry(() =>
-          getResultsSummary({
-            routingDateObj: routingStart,
-            deliveryDateObj: localStart,
-            hubId: hubId,
-          })
-        ),
+        getTasks({
+          status: 'DONE,ONGOING,UNASSIGNED',
+          hubId,
+          timeFrom,
+          timeTo,
+        }),
+        getResults({
+          routingDateObj: routingStart,
+          deliveryDateObj: localStart,
+          hubId: hubId,
+        }),
       ]);
 
       const tasksArray = Array.isArray(tasksData) ? tasksData : tasksData?.data || [];
@@ -190,11 +157,11 @@ export default function Dashboard({ driverData }) {
 
       setRawData({ tasks: tasksArray, results: resultsArray });
     } catch (err) {
-      toastError(t('common.toast.error', { err: err.message }));
+      toastError(t('common.toast.error', { err: err.message }), err);
     } finally {
       setLoading(false);
     }
-  }, [selectedDate, fetchWithRetry, hubId, t, driverData]);
+  }, [selectedDate, hubId, t, driverData]);
 
   useEffect(() => {
     fetchData();
@@ -220,16 +187,12 @@ export default function Dashboard({ driverData }) {
       let allTasks = [];
       try {
         const promises = monthlyRanges.map((range) =>
-          fetchWithRetry(() =>
-            getTasks({
-              hubId,
-              status: 'DONE',
-              timeFrom: range.start,
-              timeTo: range.end,
-              timeBy: 'startTime',
-              limit: 10000,
-            })
-          )
+          getTasks({
+            hubId,
+            status: 'DONE',
+            timeFrom: range.start,
+            timeTo: range.end,
+          })
         );
 
         const results = await Promise.allSettled(promises);
@@ -259,12 +222,12 @@ export default function Dashboard({ driverData }) {
         const cacheKey = `${hubId}:${year}`;
         yearlyCacheRef.current[cacheKey] = allTasks;
       } catch (err) {
-        toastError(t('common.toast.error'), { err: err.message });
+        toastError(t('common.toast.error', { err: err.message }), err);
       } finally {
         setIsYearlyLoading(false);
       }
     },
-    [fetchWithRetry, t]
+    [t]
   );
 
   useEffect(() => {
@@ -310,27 +273,44 @@ export default function Dashboard({ driverData }) {
     return map;
   }, [driverData]);
 
-  const filteredDailyTasks = useMemo(() => {
-    if (isEmpty(rawData.tasks)) return [];
-    if (storageFilter.length === 0) return [];
-    if (storageFilter.length === 2) return rawData.tasks;
+  const applyFilters = useCallback(
+    (tasks) => {
+      if (isEmpty(tasks)) return [];
+      let filtered = tasks;
+      if (storageFilter.length === 0) return [];
+      if (storageFilter.length === 1) {
+        filtered = filtered.filter((t) =>
+          storageFilter.includes((t.typeStorage || '').toUpperCase())
+        );
+      }
+      if (typeFilter && typeFilter !== 'all') {
+        filtered = filtered.filter((t) => {
+          let email = Array.isArray(t.assignee)
+            ? t.assignee[0]
+            : t.assignee || t.assignedTo?.email || t.doneBy;
+          email = normalizeEmail(email);
+          const plat =
+            t.assignedVehicle?.name || t.assignedVehicle?.plat || t.vehicleName || t.plat;
+          const platNorm = (plat || '').replace(/\s+/g, '').toLowerCase();
+          const d = driverData?.find(
+            (dr) =>
+              normalizeEmail(dr.email) === email ||
+              (dr.plat && dr.plat.replace(/\s+/g, '').toLowerCase() === platNorm)
+          );
+          if (!d) return false;
+          return getBaseVehicleType(d.type, masterVehicleTypes) === typeFilter;
+        });
+      }
+      return filtered;
+    },
+    [storageFilter, typeFilter, driverData, masterVehicleTypes]
+  );
 
-    return rawData.tasks.filter((t) => {
-      const type = (t.typeStorage || '').toUpperCase();
-      return storageFilter.includes(type);
-    });
-  }, [rawData.tasks, storageFilter]);
-
-  const filteredYearlyTasks = useMemo(() => {
-    if (isEmpty(yearlyTasks)) return [];
-    if (storageFilter.length === 0) return [];
-    if (storageFilter.length === 2) return yearlyTasks;
-
-    return yearlyTasks.filter((t) => {
-      const type = (t.typeStorage || '').toUpperCase();
-      return storageFilter.includes(type);
-    });
-  }, [yearlyTasks, storageFilter]);
+  const filteredDailyTasks = useMemo(
+    () => applyFilters(rawData.tasks),
+    [applyFilters, rawData.tasks]
+  );
+  const filteredYearlyTasks = useMemo(() => applyFilters(yearlyTasks), [applyFilters, yearlyTasks]);
 
   const summaryData = useMemo(() => {
     return calculateDashboard(filteredDailyTasks, driverMap, isIndonesian, hasPendingGR);
@@ -338,7 +318,7 @@ export default function Dashboard({ driverData }) {
 
   const isDiagramTab = activeTab === 'Diagram';
 
-  const isLoadingSelected = (isDiagramTab ? isYearlyLoading : loading) || isFiltering;
+  const isLoadingSelected = isDiagramTab ? isYearlyLoading : loading;
 
   const currentHubId = typeof window !== 'undefined' ? hubId : null;
 
@@ -363,39 +343,45 @@ export default function Dashboard({ driverData }) {
     isCardEmpty = !loading && noOngoingAndDone;
   }
 
-  const subtitle = (
-    <>
-      {t('dashboard.subtitle')}{' '}
-      <span className="font-semibold text-sky-600">{t('dashboard.subtitle_highlight')}</span>
-    </>
-  );
-
-  const datePicker = (
-    <CustomDatePicker
-      selected={selectedDate}
-      onChange={handleDateChange}
-      isLoading={isDiagramTab ? isYearlyLoading : loading}
-      dateFormat={isDiagramTab ? 'yyyy' : 'dd MMMM yyyy'}
-      showYearPicker={isDiagramTab}
-      className="custom-year-picker"
-      maxDate={isDiagramTab ? new Date() : tomorrowDate()}
-      disableSunday={!isDiagramTab}
-    />
-  );
-
-  const storageFilterComponent = (
-    <StorageTypeFilter selectedTypes={storageFilter} onApply={handleApplyFilter} />
-  );
-
   const headerItems = [
     {
       label: t('common.storage_type'),
-      component: storageFilterComponent,
+      component: (
+        <StorageTypeFilter
+          disabled={isLoadingSelected}
+          onApply={setStorageFilter}
+          selectedTypes={storageFilter}
+        />
+      ),
       hideLabel: false,
     },
     {
+      label: t('common.vehicle_type'),
+      hideLabel: false,
+      component: (
+        <VehicleTypeFilter
+          data={driverData}
+          disabled={isLoadingSelected}
+          onApply={setTypeFilter}
+          onMasterTypesLoad={setMasterVehicleTypes}
+          selectedType={typeFilter}
+        />
+      ),
+    },
+    {
       label: isDiagramTab ? t('dashboard.year_performance') : t('common.delivery_date'),
-      component: datePicker,
+      component: (
+        <CustomDatePicker
+          selected={selectedDate}
+          onChange={handleDateChange}
+          isLoading={isDiagramTab ? isYearlyLoading : loading}
+          dateFormat={isDiagramTab ? 'yyyy' : 'dd MMMM yyyy'}
+          showYearPicker={isDiagramTab}
+          className="custom-year-picker"
+          maxDate={isDiagramTab ? new Date() : tomorrowDate()}
+          disableSunday={!isDiagramTab}
+        />
+      ),
       hideLabel: false,
     },
   ];
@@ -409,47 +395,58 @@ export default function Dashboard({ driverData }) {
       extraContent: getPingDot('RoutingVsActual'),
     },
   ];
-
   return (
-    <div className="w-full max-w-none px-4 sm:px-6 pb-2">
-      <HeaderCard title="Dashboard" subtitle={subtitle} items={headerItems} />
-      <BodyCard
-        tabs={cardTabs}
-        activeTabId={activeTab}
-        onTabClick={handleTabClick}
-        isLoading={isLoadingSelected}
-        timerStartTime={fetchStartTimeRef.current}
-        isEmpty={isCardEmpty}
-        emptyMessage={emptyMessage}
-        routingData={rawData.results}
-      >
-        <div className="flex-1 flex flex-col p-3 overflow-hidden dark:bg-slate-800">
-          {activeTab === 'Detail' && (
-            <DetailTab loading={loading} summaryData={summaryData} hasPendingGR={hasPendingGR} />
-          )}
+    <PageTemplate
+      title="Dashboard"
+      subtitle={
+        <>
+          {t('dashboard.subtitle')}{' '}
+          <span className="font-semibold text-sky-600">{t('dashboard.subtitle_highlight')}</span>
+        </>
+      }
+      headerItems={headerItems}
+      activeTabId={activeTab}
+      onTabClick={handleTabClick}
+      tabs={cardTabs}
+      isLoading={isLoadingSelected}
+      isEmpty={isCardEmpty}
+      emptyMessage={emptyMessage}
+      footer={
+        activeTab === 'RoutingVsActual' && {
+          text: t('common.click_for_detail'),
+        }
+      }
+      bodyProps={{
+        timerStartTime: fetchStartTimeRef.current,
+        routingData: rawData.results,
+      }}
+    >
+      <div className="flex-1 flex flex-col p-3 overflow-hidden dark:bg-slate-800">
+        {activeTab === 'Detail' && (
+          <DetailTab loading={loading} summaryData={summaryData} driverData={driverData} />
+        )}
 
-          {activeTab === 'RoutingVsActual' && (
-            <RoutingVsActualTab
-              loading={loading}
-              tasks={filteredDailyTasks}
-              results={rawData.results}
-              drivers={driverData}
-              selectedDate={selectedDate}
-              hasPendingGR={hasPendingGR}
-            />
-          )}
+        {activeTab === 'RoutingVsActual' && (
+          <RoutingVsActualTab
+            loading={loading}
+            tasks={filteredDailyTasks}
+            results={rawData.results}
+            drivers={driverData}
+            selectedDate={selectedDate}
+            hasPendingGR={hasPendingGR}
+          />
+        )}
 
-          {activeTab === 'Diagram' && !isYearlyLoading && (
-            <DiagramTab
-              yearlyTasks={filteredYearlyTasks}
-              hubId={currentHubId}
-              driverData={driverData}
-              selectedDate={selectedDate}
-              hasPendingGR={hasPendingGR}
-            />
-          )}
-        </div>
-      </BodyCard>
-    </div>
+        {activeTab === 'Diagram' && !isYearlyLoading && (
+          <DiagramTab
+            yearlyTasks={filteredYearlyTasks}
+            hubId={currentHubId}
+            driverData={driverData}
+            selectedDate={selectedDate}
+            hasPendingGR={hasPendingGR}
+          />
+        )}
+      </div>
+    </PageTemplate>
   );
 }
