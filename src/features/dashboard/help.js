@@ -1,3 +1,4 @@
+// File: src/features/dashboard/help.js
 import {
   formatDateUniversal,
   isEmpty,
