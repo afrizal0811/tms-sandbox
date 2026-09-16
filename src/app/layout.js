@@ -15,8 +15,8 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: 'TMS Processing',
-  description: 'TMS Processing',
+  title: 'TMS SANDBOX',
+  description: 'TMS SANDBOX',
 };
 
 export default function RootLayout({ children }) {
